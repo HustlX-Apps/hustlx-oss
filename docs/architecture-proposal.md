@@ -1,6 +1,6 @@
-# Architecture proposal
+# Architecture and proposals
 
-Status: Rust-rendered UI throughout was selected by the user on October 16, 2026. Iced is the initial toolkit. The persistence and production clock design below remains proposed. The first implementation is a deliberately in-memory sample console.
+Status: Rust-rendered UI throughout was selected by the user on October 16, 2026. Iced is the initial toolkit. SQLite persistence and the local library are implemented. Production clocks, export/backup tooling, and syncing remain proposed.
 
 ## UI decision
 
@@ -13,24 +13,24 @@ The UI must be written in Rust and rendered by the desktop application. Use Iced
 
 References checked October 16, 2026: [Iced 0.14 documentation](https://docs.rs/iced/0.14.0/iced/) and [egui repository](https://github.com/emilk/egui). Framework support is not evidence that our Windows/macOS builds have passed.
 
-## First implementation boundary
+## Implemented boundaries
 
-`src/lib.rs` owns a synthetic match, stable player IDs, event-derived player/team statistics, and reversible preview actions. `src/ui.rs` owns the Iced interface. The preview uses memory only, displays its unsaved state persistently, and shows a fixed clock marked as a preview. It does not claim production game-day operation, clock reliability, or durable storage. License selection remains pending.
+- `src/lib.rs` owns stable player identity, side-scoped event-derived player/team statistics, selection, and undo projection. It has no renderer dependency.
+- `src/storage.rs` and `src/schema.sql` own SQLite schema version 1, catalog operations, match creation, snapshots, and record/undo transactions. Form values use bound parameters; the UI does not issue SQL.
+- `src/session.rs` owns the active committed match and one pending command. A write failure leaves visible stats and selection unchanged. Retry uses the same UUID.
+- `src/ui.rs` and `src/library_ui.rs` own native Iced navigation, forms, and the v2 console. SQLite calls run synchronously with a bounded 250 ms busy timeout. Larger libraries may require background loading later.
 
-## Proposed boundaries
+SQLite is the durable source of truth. Read transactions load metadata, rosters, and history consistently. Write transactions append a stat or undo event and increment the match revision atomically before returning a new projection. Revision checks reject stale writes; exact UUID retries do not add another event. Undo references the original event and preserves the audit trail.
 
-- **Desktop UI:** teams, players, match library, setup, Game Day console, and local results. Package assets with the app and use no hosted page as the application shell.
-- **Rust domain core:** match commands, score/stat projections, lineups, undo/corrections, and clock state. Keep domain behavior testable without the renderer.
-- **Rust persistence:** SQLite transactions, versioned migrations, match-time roster snapshots, and export/backup operations. The UI should not write arbitrary SQL or arbitrary filesystem paths.
-- **Future sync adapter:** a separate optional integration. No network call belongs in the local command commit path.
+Catalog players and teams have local integer IDs; names and jersey labels are not keys. Match creation copies active team names and memberships into per-side snapshots. Renaming, archiving, or changing catalog memberships cannot rewrite saved match attribution. A player may belong to multiple teams, including both sides; the match side and player ID identify the actor together. Empty rosters are valid.
 
-## Local data and commands
+The database uses foreign keys, WAL, and synchronous FULL. First open creates schema version 1 transactionally. Newer, foreign, and corrupt databases fail visibly without a reset. There is no legacy real-data migration or downgrade path in this first schema. See [storage](storage.md) for paths, schema, and preservation boundaries.
 
-Proposed records are players, teams, roster memberships, matches, match roster snapshots, match events, and clock checkpoints. Use stable local identifiers. Keep future remote mappings separate rather than replacing local identity.
+## Future boundaries
 
-A UI action should call a typed Rust command. Validate the command against local state, atomically store its event and resulting state, then return the committed projection to the UI. An action identifier should prevent accidental duplicate application during retries. Corrections must preserve the original audit trail.
-
-SQLite is the proposed durable source of truth. The in-memory preview is not a match record and must be replaced by durable storage before real game use. Define schema migrations and backup/restore compatibility before users accumulate real data.
+- **Clock core:** monotonic clock commands, running/paused checkpoints, sleep/restart policy, and operator recovery.
+- **Results/export:** consistent box scores, filesystem destination selection, portable backups, and tested restores.
+- **Sync adapter:** optional remote mapping and commands. No network call belongs in the local commit path, and local identity must survive linking. No hosted contract is assumed or implemented.
 
 ## Clock and recovery
 
@@ -38,8 +38,8 @@ Use a Rust monotonic time source while the process runs. Rendering ticks must no
 
 ## Failures and exports
 
-On a failed save, keep the command visibly pending or show a retryable error; do not silently lose it. Export a consistent snapshot, let the operator select the destination, and surface filesystem failures. Backups must include schema version and sufficient match history to restore the record.
+Failed stat/undo saves remain visibly pending with an explicit retry. Pending commands are currently memory-only and do not survive quitting before they commit. Reopening a match explicitly discards its pending command and reloads committed truth. Export a consistent snapshot, let the operator select the destination, and surface filesystem failures. Backups must include schema version and sufficient match history to restore the record.
 
-## Verification to establish during implementation
+## Verification boundaries
 
-Rust tests should cover scoring, undo, duplicate commands, atomic persistence, recovery, and clock calculations. UI tests should cover Team A versus Team B setup, player attribution, local results, and export errors. Windows and macOS builds and native smoke tests are separate release gates. Verify launch, game operation, close/reopen, and export with the network disconnected.
+Rust tests cover scoring, durable undo, duplicate commands, stale revisions, atomic persistence, and failed-save display behavior. Clock recovery/calculations remain unimplemented and unverified. UI tests should cover Team A versus Team B setup, player attribution, local results, and export errors. Windows and macOS builds and native smoke tests are separate release gates. Verify launch, game operation, close/reopen, and export with the network disconnected.

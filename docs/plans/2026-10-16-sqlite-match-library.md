@@ -20,11 +20,11 @@ Use the OS application data directory and a documented `HUSTLX_OSS_DATA_DIR` ove
 
 ## Tasks and evidence
 
-- [ ] Write failing integration cases for catalog CRUD, roster membership, date/team validation, match snapshots, disk reopen, durable record/undo, duplicate retries, stale revisions, and write failure rollback.
-- [ ] Implement transactional schema version 1 and the repository in `src/storage.rs`; adapt the renderer-independent model to loaded rosters.
-- [ ] Add native Matches, Teams, Players, and Game Day navigation/forms in `src/ui.rs` and `src/library_ui.rs`. Remove the sample-only startup and unsaved notice for stored matches.
-- [ ] Exercise the real native create/reopen journey using an isolated database and capture the library and a reopened match.
-- [ ] Update architecture, development/storage guidance, roadmap, and verification evidence.
-- [ ] Run formatting, Cargo tests, Clippy, build, shared verifier boundary, and merge flagger. Push/update PR #1 targeting develop and assess Windows/macOS CI.
+- [x] Write failing integration cases for catalog CRUD, roster membership, date/team validation, match snapshots, disk reopen, durable record/undo, duplicate retries, stale revisions, and write failure rollback.
+- [x] Implement transactional schema version 1 and the repository in `src/storage.rs`; adapt the renderer-independent model to loaded rosters.
+- [x] Add native Matches, Teams, Players, and Game Day navigation/forms in `src/ui.rs` and `src/library_ui.rs`. Remove the sample-only startup and unsaved notice for stored matches.
+- [x] Exercise the real native create/reopen journey using an isolated database and capture the library and a reopened match.
+- [x] Update architecture, development/storage guidance, roadmap, and verification evidence.
+- [x] Run formatting, Cargo tests, Clippy, build, shared verifier boundary, and merge flagger. Push/update PR #1 targeting develop and assess Windows/macOS CI.
 
 No existing real database or private HustlX runtime is migrated. Future schema versions must be rejected until a corresponding migration is implemented. Game/shot clocks remain clearly marked as a preview, and exports, backups/restore, lineup editing, and paid-league sync remain planned.

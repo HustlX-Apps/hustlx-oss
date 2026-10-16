@@ -1,8 +1,8 @@
-use hustlx_oss::{Preview, Side, Stat, Stats};
+use hustlx_oss::{Game, Side, Stat, Stats};
 
 #[test]
 fn scoring_changes_only_the_selected_player_and_team() {
-    let mut game = Preview::default();
+    let mut game = Game::default();
     game.select(Side::Home, 1);
     assert!(game.record(Stat::ThreeMade));
     assert_eq!(game.score(Side::Home), 3);
@@ -14,7 +14,7 @@ fn scoring_changes_only_the_selected_player_and_team() {
 
 #[test]
 fn shots_track_makes_attempts_and_free_throws_separately() {
-    let mut game = Preview::default();
+    let mut game = Game::default();
     for stat in [
         Stat::ThreeMade,
         Stat::ThreeMiss,
@@ -41,7 +41,7 @@ fn shots_track_makes_attempts_and_free_throws_separately() {
 
 #[test]
 fn undo_restores_the_previous_score_and_stat_line() {
-    let mut game = Preview::default();
+    let mut game = Game::default();
     game.select(Side::Home, 1);
     assert!(game.record(Stat::TwoMade));
     game.select(Side::Away, 11);
@@ -56,7 +56,7 @@ fn undo_restores_the_previous_score_and_stat_line() {
 
 #[test]
 fn unknown_or_wrong_side_identity_cannot_receive_a_stat() {
-    let mut game = Preview::default();
+    let mut game = Game::default();
     for (side, id) in [(Side::Home, 999), (Side::Home, 11), (Side::Away, 1)] {
         game.select(side, id);
         assert!(!game.record(Stat::TwoMade));
@@ -66,7 +66,7 @@ fn unknown_or_wrong_side_identity_cannot_receive_a_stat() {
 
 #[test]
 fn a_second_action_needs_a_new_player_selection() {
-    let mut game = Preview::default();
+    let mut game = Game::default();
     game.select(Side::Home, 1);
     assert!(game.record(Stat::Assist));
     assert!(!game.record(Stat::Assist));
@@ -75,7 +75,7 @@ fn a_second_action_needs_a_new_player_selection() {
 
 #[test]
 fn rebounds_and_discipline_are_player_scoped_and_undoable() {
-    let mut game = Preview::default();
+    let mut game = Game::default();
     for stat in [
         Stat::OffensiveRebound,
         Stat::DefensiveRebound,

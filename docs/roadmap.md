@@ -19,17 +19,19 @@ Each slice should produce a reviewable change, matching documentation, and evide
 
 ## Local library
 
-- [ ] Persist teams, players, and roster memberships.
-- [ ] Create a named, dated match at a venue by choosing Team A and Team B.
-- [ ] Save match roster snapshots and reopen matches from the local library.
+- [x] Persist teams, players, and roster memberships, including rename/archive/restore.
+- [x] Create a named, dated match with an optional venue by choosing Team A and Team B.
+- [x] Save match roster snapshots and reopen matches from the local library. See [evidence](evidence/sqlite-library/README.md).
 
 ## Basketball Game Day
 
-- [ ] Reproduce the v2 scoreboard and three-column console in both themes.
-- [ ] Implement scoring, player attribution, shots, rebounds, assists, steals, blocks, turnovers, and fouls.
+- [x] Reproduce the v2 scoreboard and three-column console in both themes.
+- [x] Persist scoring, player attribution, shots, rebounds, assists, steals, blocks, turnovers, and fouls.
 - [ ] Implement lineups, substitutions, timeouts, and configurable periods.
-- [ ] Implement durable undo/corrections and game/shot clock recovery.
-- [ ] Prove that closing or interrupting the app does not lose committed game actions.
+- [x] Implement durable undo with an append-only correction trail.
+- [ ] Implement broader correction editing and game/shot clock recovery.
+- [x] Prove committed stats survive close/reopen and failed writes roll back.
+- [ ] Exercise abrupt process interruption and system sleep during clock operation.
 
 ## Results and release
 

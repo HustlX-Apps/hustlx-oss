@@ -2,7 +2,7 @@
 
 Offline-first basketball Game Day for Windows and macOS, built around a Rust core and the HustlX web Game Day v2 experience.
 
-**Status:** native Rust preview in development. The UI and domain logic use Rust throughout, with Iced for rendering. SQLite persistence, production clocks, match management, exports, and installers are not implemented yet. The project license still needs a maintainer decision.
+**Status:** native Rust application in development. The Iced interface now supports a SQLite team/player library, roster editing, match creation and reopening, and durable stat entry/undo. Game/shot clocks, substitutions, exports, and installers remain planned. The project license still needs a maintainer decision.
 
 ## What we are building
 
@@ -13,13 +13,20 @@ Offline-first basketball Game Day for Windows and macOS, built around a Rust cor
 - Reopen saved matches, view results and player statistics, and export files locally.
 - Later, optionally sync with an eligible paid league on HustlX. Local game operation must remain independent of connectivity and subscription state.
 
-## Native preview
+## Try the local library
 
-The first native Rust console supports player selection, shot/stat recording, undo, and light/dark themes against an in-memory sample match:
+Run `cargo run --locked`, then:
 
-![Native Rust preview, dark mode](docs/evidence/native-preview/dark.jpg)
+1. Open **Players** and create players.
+2. Open **Teams**, create two teams, and assign players and optional jersey labels.
+3. Open **Matches**, choose Team A and Team B, enter a name and date, optionally enter a venue, then create the match.
+4. Select a player to record a stat. Close the app, reopen it, and choose **Open match** to continue.
 
-[Light-mode native preview](docs/evidence/native-preview/light.jpg) and [verification evidence](docs/evidence/native-preview/README.md).
+Team and player names and rosters are copied into each new match. Later library edits preserve its history. The library starts empty; screenshots use synthetic test data.
+
+![Saved native match reopened after restart](docs/evidence/sqlite-library/reopened-match.jpg)
+
+[Match library](docs/evidence/sqlite-library/matches.jpg), [light theme](docs/evidence/sqlite-library/reopened-match-light.jpg), and [verification evidence](docs/evidence/sqlite-library/README.md). See [local storage](docs/storage.md) for data locations and save/retry behavior.
 
 ## Web UI reference
 
@@ -31,16 +38,17 @@ This is the existing web console rendered with sample data, not the desktop appl
 
 ## Development
 
-Install Rust with [rustup](https://rustup.rs/), then run `cargo run --locked`. The sample match is an in-memory preview; changes are not saved. See [development and verification](docs/development.md).
+Install Rust with [rustup](https://rustup.rs/), then run `cargo run --locked`. SQLite is bundled; no database server is needed. See [development and verification](docs/development.md).
 
 ## Documentation
 
 - [Product brief](docs/product-brief.md): confirmed scope and open decisions.
-- [Architecture proposal](docs/architecture-proposal.md): Rust, persistence, UI, and future sync boundaries.
+- [Architecture](docs/architecture-proposal.md): implemented Rust/SQLite boundaries and proposed clocks/sync.
+- [Local storage](docs/storage.md): schema, data paths, snapshots, and failure handling.
 - [Roadmap](docs/roadmap.md): implementation slices and acceptance evidence.
 - [UI reference](docs/references/README.md): capture provenance and visual parity notes.
 - [Contributing](CONTRIBUTING.md): small changes, documentation, and verification expectations.
 
 ## Open-source preparation
 
-This repository is intended to become open source. A license has not been selected yet; public visibility alone does not grant reuse rights. Choose and add the project license before accepting outside code contributions or publishing a software release. The Rust preview is a new implementation; the private web application's source has not been copied. Bundled fonts retain their own license, documented in [third-party notices](THIRD_PARTY_NOTICES.md).
+This repository is intended to become open source. A license has not been selected yet; public visibility alone does not grant reuse rights. Choose and add the project license before accepting outside code contributions or publishing a software release. The Rust application is a new implementation; the private web application's source has not been copied. Bundled fonts retain their own license, documented in [third-party notices](THIRD_PARTY_NOTICES.md).

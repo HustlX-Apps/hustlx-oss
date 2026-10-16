@@ -1,6 +1,10 @@
-use hustlx_oss::{Preview, Side, Stat};
+use hustlx_oss::session::Session;
+use hustlx_oss::storage::{Entry, MatchSummary, RosterEntry, SavedMatch, Store};
+use hustlx_oss::{Game, Side, Stat};
 use iced::widget::{Column, Container, Space, button, column, container, row, scrollable, text};
 use iced::{Border, Color, Element, Fill, Font, Length, Theme, alignment};
+#[path = "library_ui.rs"]
+mod library;
 
 const HOME: Color = Color::from_rgb(0.62, 0.57, 1.0);
 const AWAY: Color = Color::from_rgb(0.96, 0.81, 0.25);
@@ -11,28 +15,98 @@ const BOLD: Font = Font {
     ..Font::with_name("Fira Sans")
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Screen {
+    Matches,
+    Teams,
+    Players,
+    GameDay,
+}
 #[derive(Debug, Clone)]
 pub enum Message {
-    Select(Side, u32),
+    Select(Side, i64),
     Record(Stat),
     Undo,
     ToggleTheme,
+    Navigate(Screen),
+    Refresh,
+    RetryStorage,
+    RetrySave,
+    OpenMatch(i64),
+    CreateMatch,
+    MatchName(String),
+    MatchDate(String),
+    MatchVenue(String),
+    HomeTeam(Entry),
+    AwayTeam(Entry),
+    TeamName(String),
+    SaveTeam,
+    EditTeam(i64),
+    CancelTeam,
+    ArchiveTeam(i64, bool),
+    ShowTeams(bool),
+    PlayerName(String),
+    SavePlayer,
+    EditPlayer(i64),
+    CancelPlayer,
+    ArchivePlayer(i64, bool),
+    ShowPlayers(bool),
+    RosterTeam(Entry),
+    RosterPlayer(Entry),
+    Jersey(String),
+    SaveRoster,
+    RemoveRoster(i64),
+    EditJersey(i64),
 }
 
 pub struct App {
-    game: Preview,
+    session: Option<Session>,
     dark: bool,
+    screen: Screen,
+    error: Option<String>,
+    teams: Vec<Entry>,
+    players: Vec<Entry>,
+    matches: Vec<MatchSummary>,
+    roster: Vec<RosterEntry>,
+    match_form: library::MatchForm,
+    team_name: String,
+    editing_team: Option<i64>,
+    show_teams: bool,
+    player_name: String,
+    editing_player: Option<i64>,
+    show_players: bool,
+    roster_team: Option<Entry>,
+    roster_player: Option<Entry>,
+    jersey: String,
 }
-
 impl Default for App {
     fn default() -> Self {
-        Self {
-            game: Preview::default(),
+        let mut app = Self {
+            session: None,
             dark: true,
+            screen: Screen::Matches,
+            error: None,
+            teams: vec![],
+            players: vec![],
+            matches: vec![],
+            roster: vec![],
+            match_form: library::MatchForm::default(),
+            team_name: String::new(),
+            editing_team: None,
+            show_teams: false,
+            player_name: String::new(),
+            editing_player: None,
+            show_players: false,
+            roster_team: None,
+            roster_player: None,
+            jersey: String::new(),
+        };
+        if let Err(error) = app.connect() {
+            app.error = Some(error.to_string());
         }
+        app
     }
 }
-
 #[derive(Clone, Copy)]
 struct Colors {
     background: Color,
@@ -49,22 +123,43 @@ struct Colors {
 
 impl App {
     pub fn update(&mut self, message: Message) {
-        match message {
-            Message::Select(side, id) => self.game.select(side, id),
-            Message::Record(stat) => {
-                self.game.record(stat);
+        let result = match message {
+            Message::Select(side, id) => {
+                if let Some(s) = &mut self.session {
+                    s.select(side, id);
+                }
+                Ok(())
             }
-            Message::Undo => {
-                self.game.undo();
+            Message::Record(stat) => self.session_mut().and_then(|s| s.record(stat)),
+            Message::Undo => self.session_mut().and_then(Session::undo),
+            Message::RetrySave => self.session_mut().and_then(Session::retry),
+            Message::ToggleTheme => {
+                self.dark = !self.dark;
+                Ok(())
             }
-            Message::ToggleTheme => self.dark = !self.dark,
+            other => self.update_library(other),
+        };
+        match result {
+            Ok(()) => {
+                if !self.pending() {
+                    self.error = None;
+                }
+            }
+            Err(error) => self.error = Some(error.to_string()),
         }
     }
-
     pub fn theme(&self) -> Theme {
         if self.dark { Theme::Dark } else { Theme::Light }
     }
-
+    fn pending(&self) -> bool {
+        self.session.as_ref().is_some_and(Session::has_pending_save)
+    }
+    fn active(&self) -> Option<&SavedMatch> {
+        self.session.as_ref().and_then(Session::active)
+    }
+    fn game(&self) -> &Game {
+        &self.active().expect("Game Day requires an open match").game
+    }
     fn colors(&self) -> Colors {
         if self.dark {
             Colors {
@@ -97,68 +192,92 @@ impl App {
 
     pub fn view(&self) -> Element<'_, Message> {
         let c = self.colors();
-        let header = row![
-            text("HUSTLX").size(19).font(BOLD),
-            text("/  GAME DAY").size(12).color(c.muted),
-            Space::new().width(Fill),
-            badge("NATIVE RUST PREVIEW", c.green, c),
+        let mut nav = row![text("HUSTLX").size(19).font(BOLD)]
+            .spacing(10)
+            .align_y(alignment::Vertical::Center);
+        for (label, screen) in [
+            ("Matches", Screen::Matches),
+            ("Teams", Screen::Teams),
+            ("Players", Screen::Players),
+        ] {
+            nav = nav.push(
+                button(text(label).size(12))
+                    .on_press(Message::Navigate(screen))
+                    .padding([8, 12])
+                    .style(if self.screen == screen {
+                        button::primary
+                    } else {
+                        button::secondary
+                    }),
+            );
+        }
+        if self.active().is_some() {
+            nav = nav.push(
+                button(text("Game Day").size(12))
+                    .on_press(Message::Navigate(Screen::GameDay))
+                    .padding([8, 12]),
+            );
+        }
+        nav = nav.push(Space::new().width(Fill)).push(
             button(
                 text(if self.dark {
                     "Light theme"
                 } else {
                     "Dark theme"
                 })
-                .size(12)
+                .size(12),
             )
             .on_press(Message::ToggleTheme)
-            .padding([8, 14])
+            .padding([8, 12])
             .style(button::secondary),
-        ]
-        .spacing(14)
-        .align_y(alignment::Vertical::Center);
-
-        let scoreboard = card(
-            column![
-                row![
-                    text("SAMPLE MATCH").size(10).color(c.muted),
-                    Space::new().width(Fill),
-                    text("BASKETBALL / 5v5").size(10).color(c.muted)
-                ],
-                row![
-                    self.score(Side::Home, c),
-                    self.clock(c),
-                    self.score(Side::Away, c)
-                ]
-                .spacing(18)
-                .align_y(alignment::Vertical::Center),
-            ]
-            .spacing(6),
-            c,
-        )
-        .padding([16, 26]);
-
-        let body = row![
-            self.roster(Side::Home, c),
-            self.command_center(c),
-            self.roster(Side::Away, c),
-        ]
-        .spacing(14)
-        .height(Fill);
-
-        let notice = row![
-            text("SAMPLE DATA").font(BOLD).size(10).color(c.away),
-            text("Changes are not saved. Clock is a fixed preview.")
-                .size(12)
-                .color(c.muted),
-            Space::new().width(Fill),
-            text("LOCAL TEAMS + MATCHES COMING NEXT")
+        );
+        let mut page = column![nav].spacing(14);
+        if let Some(error) = &self.error {
+            let mut actions = row![text(error).size(12).color(c.red).width(Fill)]
+                .spacing(10)
+                .align_y(alignment::Vertical::Center);
+            if self.pending() {
+                actions =
+                    actions.push(button(text("Retry save").size(12)).on_press(Message::RetrySave));
+            }
+            page = page.push(card(actions, c).padding(10));
+        }
+        let body = if self.session.is_none() {
+            card(column![text("Your library could not be opened").size(24).font(BOLD),
+                text("Your existing data has not been replaced. Check the data folder, then retry.").size(14).color(c.muted),
+                button("Retry opening library").on_press(Message::RetryStorage)].spacing(18),c).width(Fill).height(Fill).into()
+        } else if self.screen == Screen::GameDay && self.active().is_some() {
+            self.game_view(c)
+        } else {
+            self.library_view(c)
+        };
+        page = page.push(body).push(
+            row![
+                text(if self.session.is_none() {
+                    "STORAGE UNAVAILABLE"
+                } else if self.pending() {
+                    "SAVE PENDING"
+                } else {
+                    "SAVED ON THIS COMPUTER"
+                })
                 .size(10)
+                .font(BOLD)
+                .color(if self.session.is_none() || self.pending() {
+                    c.red
+                } else {
+                    c.green
+                }),
+                text(if self.pending() {
+                    "Retry the save, or reopen a match to discard the unsaved action."
+                } else {
+                    "Offline library. Game and shot clocks are still a preview."
+                })
+                .size(11)
                 .color(c.muted),
-        ]
-        .spacing(12)
-        .align_y(alignment::Vertical::Center);
-
-        container(column![header, scoreboard, body, notice].spacing(16))
+            ]
+            .spacing(12),
+        );
+        container(page)
             .padding(20)
             .width(Fill)
             .height(Fill)
@@ -169,22 +288,70 @@ impl App {
             })
             .into()
     }
-
+    fn game_view(&self, c: Colors) -> Element<'_, Message> {
+        let saved = self.active().expect("Game Day requires an open match");
+        let scoreboard = card(
+            column![
+                row![
+                    column![
+                        text(&saved.summary.name).size(15).font(BOLD),
+                        text(format!(
+                            "{}  /  {}",
+                            saved.summary.date,
+                            if saved.summary.venue.is_empty() {
+                                "Venue not set"
+                            } else {
+                                &saved.summary.venue
+                            }
+                        ))
+                        .size(11)
+                        .color(c.muted)
+                    ]
+                    .spacing(4)
+                    .width(Fill),
+                    badge("LOCAL MATCH", c.green, c)
+                ],
+                row![
+                    self.score(Side::Home, c),
+                    self.clock(c),
+                    self.score(Side::Away, c)
+                ]
+                .spacing(18)
+                .align_y(alignment::Vertical::Center),
+            ]
+            .spacing(8),
+            c,
+        )
+        .padding([14, 22]);
+        column![
+            scoreboard,
+            row![
+                self.roster(Side::Home, c),
+                self.command_center(c),
+                self.roster(Side::Away, c)
+            ]
+            .spacing(14)
+            .height(Fill)
+        ]
+        .spacing(14)
+        .height(Fill)
+        .into()
+    }
     fn score(&self, side: Side, c: Colors) -> Element<'_, Message> {
         let accent = if side == Side::Home { c.home } else { c.away };
         let fouls: u32 = self
-            .game
+            .game()
             .team(side)
             .players
             .iter()
-            .map(|p| self.game.player_stats(side, p.id).fouls)
+            .map(|p| self.game().player_stats(side, p.id).fouls)
             .sum();
         column![
-            text(self.game.team(side).name.to_uppercase())
+            text(self.game().team(side).name.to_uppercase())
                 .size(13)
                 .font(BOLD)
                 .color(accent),
-            text(format!("{:02}", self.game.score(side)))
+            text(format!("{:02}", self.game().score(side)))
                 .size(68)
                 .font(BOLD),
             text(format!("{fouls} personal fouls"))
@@ -202,14 +369,14 @@ impl App {
 
     fn clock(&self, c: Colors) -> Element<'_, Message> {
         column![
-            text("Q3  /  CLOCK PREVIEW").size(10).color(c.muted),
+            text("Q1  /  CLOCK PREVIEW").size(10).color(c.muted),
             row![
                 column![
-                    text("17").size(32).font(BOLD).color(c.away),
+                    text("24").size(32).font(BOLD).color(c.away),
                     text("SHOT").size(9).color(c.muted)
                 ]
                 .align_x(alignment::Horizontal::Center),
-                text("04:12").size(60).font(BOLD),
+                text("10:00").size(60).font(BOLD),
             ]
             .spacing(14)
             .align_y(alignment::Vertical::Center),
@@ -224,7 +391,7 @@ impl App {
     }
 
     fn roster(&self, side: Side, c: Colors) -> Element<'_, Message> {
-        let team = self.game.team(side);
+        let team = self.game().team(side);
         let accent = if side == Side::Home { c.home } else { c.away };
         let heading = row![
             text(&team.name).size(16).font(BOLD),
@@ -245,10 +412,10 @@ impl App {
                 .padding([8, 2]),
             );
             for p in team.players.iter().filter(|p| p.on_court == on_court) {
-                let stats = self.game.player_stats(side, p.id);
-                let selected = self.game.selected == Some((side, p.id));
+                let stats = self.game().player_stats(side, p.id);
+                let selected = self.game().selected == Some((side, p.id));
                 let content = row![
-                    text(format!("{:02}", p.jersey))
+                    text(jersey_label(&p.jersey))
                         .size(25)
                         .font(BOLD)
                         .color(accent)
@@ -272,7 +439,7 @@ impl App {
                 .align_y(alignment::Vertical::Center);
                 players = players.push(
                     button(content)
-                        .on_press(Message::Select(side, p.id))
+                        .on_press_maybe((!self.pending()).then_some(Message::Select(side, p.id)))
                         .width(Fill)
                         .padding([12, 10])
                         .style(move |_, status| {
@@ -316,9 +483,9 @@ impl App {
 
     fn command_center(&self, c: Colors) -> Element<'_, Message> {
         let target = self
-            .game
+            .game()
             .selected
-            .and_then(|(side, id)| self.game.player(side, id));
+            .and_then(|(side, id)| self.game().player(side, id));
         let title = match target {
             Some(player) => format!("Pad aimed at #{} {}", player.jersey, player.name),
             None => "Select a player from either roster".to_owned(),
@@ -365,18 +532,20 @@ impl App {
 
         let undo = button(text("Undo last").size(11))
             .padding([7, 12])
-            .on_press_maybe((!self.game.plays().is_empty()).then_some(Message::Undo))
+            .on_press_maybe(
+                (!self.game().plays().is_empty() && !self.pending()).then_some(Message::Undo),
+            )
             .style(button::secondary);
         let mut feed = Column::new().spacing(8);
-        if self.game.plays().is_empty() {
+        if self.game().plays().is_empty() {
             feed = feed.push(container(column![
                 text("Ready for the first play").size(18).font(BOLD),
-                text("Select a player, then record a shot or stat.\nYour sample plays will appear here.").size(13).color(c.muted),
+                text("Select a player, then record a shot or stat.\nYour saved plays will appear here.").size(13).color(c.muted),
             ].spacing(10)).padding([24, 8]));
         }
-        for (index, play) in self.game.plays().iter().enumerate().rev() {
+        for (index, play) in self.game().plays().iter().enumerate().rev() {
             let player = self
-                .game
+                .game()
                 .player(play.side, play.player_id)
                 .expect("preview plays contain known players");
             let accent = if play.side == Side::Home {
@@ -426,7 +595,7 @@ impl App {
             column![
                 pad,
                 row![
-                    text(format!("PLAY-BY-PLAY  /  {}", self.game.plays().len()))
+                    text(format!("PLAY-BY-PLAY  /  {}", self.game().plays().len()))
                         .size(10)
                         .color(c.muted),
                     Space::new().width(Fill),
@@ -454,8 +623,13 @@ impl App {
                 .width(Fill)
                 .align_x(alignment::Horizontal::Center),
         )
-        .on_press_maybe(self.game.selected.map(|_| Message::Record(stat)))
-        .padding([13, 4])
+        .on_press_maybe(
+            self.game()
+                .selected
+                .filter(|_| !self.pending())
+                .map(|_| Message::Record(stat)),
+        )
+        .padding([9, 4])
         .width(Fill)
         .style(move |_, status| {
             let disabled = status == button::Status::Disabled;
@@ -525,4 +699,8 @@ fn blend(base: Color, accent: Color, amount: f32) -> Color {
         base.g + (accent.g - base.g) * amount,
         base.b + (accent.b - base.b) * amount,
     )
+}
+
+fn jersey_label(jersey: &str) -> &str {
+    if jersey.is_empty() { "?" } else { jersey }
 }

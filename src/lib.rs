@@ -1,4 +1,7 @@
-//! Pure Rust preview model. No persistence or production clock is implemented yet.
+//! Renderer-independent basketball state. SQLite owns durable local matches.
+
+pub mod session;
+pub mod storage;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Side {
@@ -84,9 +87,9 @@ pub struct Stats {
 
 #[derive(Debug, Clone)]
 pub struct Player {
-    pub id: u32,
+    pub id: i64,
     pub name: String,
-    pub jersey: u8,
+    pub jersey: String,
     pub on_court: bool,
 }
 
@@ -99,29 +102,29 @@ pub struct Team {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Play {
     pub side: Side,
-    pub player_id: u32,
+    pub player_id: i64,
     pub stat: Stat,
 }
 
 #[derive(Debug, Clone)]
-pub struct Preview {
-    pub selected: Option<(Side, u32)>,
+pub struct Game {
+    pub selected: Option<(Side, i64)>,
     teams: [Team; 2],
     plays: Vec<Play>,
 }
 
-impl Default for Preview {
+impl Default for Game {
     fn default() -> Self {
-        fn team(name: &str, first_id: u32, roster: &[(&str, u8)]) -> Team {
+        fn team(name: &str, first_id: i64, roster: &[(&str, u8)]) -> Team {
             Team {
                 name: name.to_owned(),
                 players: roster
                     .iter()
                     .enumerate()
                     .map(|(index, (name, jersey))| Player {
-                        id: first_id + index as u32,
+                        id: first_id + index as i64,
                         name: (*name).to_owned(),
-                        jersey: *jersey,
+                        jersey: jersey.to_string(),
                         on_court: index < 5,
                     })
                     .collect(),
@@ -162,7 +165,15 @@ impl Default for Preview {
     }
 }
 
-impl Preview {
+impl Game {
+    pub(crate) fn from_saved(teams: [Team; 2], plays: Vec<Play>) -> Self {
+        Self {
+            selected: None,
+            teams,
+            plays,
+        }
+    }
+
     pub fn team(&self, side: Side) -> &Team {
         &self.teams[match side {
             Side::Home => 0,
@@ -170,14 +181,14 @@ impl Preview {
         }]
     }
 
-    pub fn player(&self, side: Side, id: u32) -> Option<&Player> {
+    pub fn player(&self, side: Side, id: i64) -> Option<&Player> {
         self.team(side)
             .players
             .iter()
             .find(|player| player.id == id)
     }
 
-    pub fn player_stats(&self, side: Side, id: u32) -> Stats {
+    pub fn player_stats(&self, side: Side, id: i64) -> Stats {
         let mut stats = Stats::default();
         for play in self
             .plays
@@ -228,7 +239,7 @@ impl Preview {
             .sum()
     }
 
-    pub fn select(&mut self, side: Side, id: u32) {
+    pub fn select(&mut self, side: Side, id: i64) {
         self.selected = if self.player(side, id).is_some() && self.selected != Some((side, id)) {
             Some((side, id))
         } else {
