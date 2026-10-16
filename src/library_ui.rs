@@ -64,6 +64,10 @@ impl App {
             .and_then(|old| players.iter().find(|p| p.id == old.id && !p.archived))
             .cloned();
         self.teams = teams;
+        self.details = players
+            .iter()
+            .map(|p| Ok((p.id, self.store()?.player_details(p.id)?)))
+            .collect::<Result<_>>()?;
         self.players = players;
         self.matches = matches;
         self.roster_team = selected;
@@ -73,6 +77,12 @@ impl App {
     pub(super) fn update_library(&mut self, message: Message) -> Result<()> {
         match message {
             Message::Navigate(screen) => {
+                if screen != Screen::GameDay && !self.pending() {
+                    self.session_mut()?.pause_for_close_at(Instant::now())?;
+                }
+                self.hotkeys.clear();
+                self.clock_edit = false;
+                self.show_hotkeys = false;
                 self.refresh()?;
                 self.screen = screen;
             }
@@ -140,12 +150,23 @@ impl App {
             }
             Message::ShowTeams(value) => self.show_teams = value,
             Message::PlayerName(value) => self.player_name = value,
-            Message::SavePlayer => {
-                if let Some(id) = self.editing_player {
-                    self.store()?.rename_player(id, &self.player_name)?;
-                } else {
-                    self.store()?.create_player(&self.player_name)?;
+            Message::PlayerJersey(value) => self.player_jersey = value,
+            Message::PlayerPosition(position, enabled) => {
+                self.player_positions.retain(|p| *p != position);
+                if enabled {
+                    self.player_positions.push(position);
                 }
+            }
+            Message::SavePlayer => {
+                let name = self.player_name.clone();
+                let jersey = self.player_jersey.clone();
+                let positions = self.player_positions.clone();
+                let id = self.editing_player;
+                self.session_mut()?
+                    .store_mut()
+                    .save_player(id, &name, &jersey, &positions)?;
+                self.player_jersey.clear();
+                self.player_positions.clear();
                 self.player_name.clear();
                 self.editing_player = None;
                 self.refresh()?;
@@ -153,12 +174,17 @@ impl App {
             Message::EditPlayer(id) => {
                 if let Some(player) = self.players.iter().find(|p| p.id == id) {
                     self.player_name = player.name.clone();
+                    let details = self.details.get(&id).cloned().unwrap_or_default();
+                    self.player_jersey = details.jersey;
+                    self.player_positions = details.positions;
                     self.editing_player = Some(id);
                 }
             }
             Message::CancelPlayer => {
                 self.editing_player = None;
                 self.player_name.clear();
+                self.player_jersey.clear();
+                self.player_positions.clear();
             }
             Message::ArchivePlayer(id, archived) => {
                 self.store()?.archive_player(id, archived)?;
@@ -432,7 +458,13 @@ impl App {
                             .font(HEADING)
                             .color(c.home)
                             .width(45),
-                        text(&p.name).size(15).width(Fill),
+                        column![
+                            text(&p.name).size(15),
+                            text(hustlx_oss::profile::encode(&p.positions))
+                                .size(11)
+                                .color(c.muted)
+                        ]
+                        .width(Fill),
                         button(text("Jersey").size(11)).on_press(Message::EditJersey(p.player_id)),
                         button(text("Remove").size(11))
                             .on_press(Message::RemoveRoster(p.player_id))
@@ -471,8 +503,12 @@ impl App {
         }
         let form=column![text(if self.editing_player.is_some(){"Edit player"}else{"Add a player"}).size(23).font(HEADING),
             text("Players can be reused across team rosters.").size(12).color(c.muted),
-            field("Player name",text_input("Full name",&self.player_name).on_input(Message::PlayerName).on_submit(Message::SavePlayer).padding(10).into(),c),controls,
-            text("Set jersey labels in each team's roster. Archiving hides a player from new match rosters and can be reversed.").size(12).color(c.muted),
+            field("Player name",text_input("Full name",&self.player_name).on_input(Message::PlayerName).on_submit(Message::SavePlayer).padding(10).into(),c),
+            field("Default jersey number",text_input("Optional, e.g. 00",&self.player_jersey).on_input(Message::PlayerJersey).padding(10).into(),c),
+            text("Positions (optional)").size(12).color(c.muted),
+            row(Position::ALL.into_iter().map(|p|checkbox(self.player_positions.contains(&p)).label(p.code()).on_toggle(move|enabled|Message::PlayerPosition(p,enabled)).into()).collect::<Vec<_>>()).spacing(9),
+            controls,
+            text("Blank team jerseys inherit this default. Positions are copied into new matches. Archiving hides a player from new match rosters and can be reversed.").size(12).color(c.muted),
         ].spacing(16);
         let mut list = column![
             text("Player library").size(23).font(HEADING),
@@ -497,6 +533,17 @@ impl App {
                 row![
                     column![
                         text(&p.name).size(17).font(HEADING),
+                        text(
+                            self.details
+                                .get(&p.id)
+                                .map_or_else(String::new, |d| format!(
+                                    "#{}  {}",
+                                    jersey_label(&d.jersey),
+                                    hustlx_oss::profile::encode(&d.positions)
+                                ))
+                        )
+                        .size(12)
+                        .color(c.muted),
                         text(format!(
                             "Player #{}{}",
                             p.id,
@@ -507,7 +554,7 @@ impl App {
                     ]
                     .spacing(4)
                     .width(Fill),
-                    button(text("Rename").size(12)).on_press(Message::EditPlayer(p.id)),
+                    button(text("Edit").size(12)).on_press(Message::EditPlayer(p.id)),
                     button(text(if p.archived { "Restore" } else { "Archive" }).size(12))
                         .on_press(Message::ArchivePlayer(p.id, !p.archived))
                 ]

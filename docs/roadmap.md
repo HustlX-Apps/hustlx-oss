@@ -29,9 +29,12 @@ Each slice should produce a reviewable change, matching documentation, and evide
 - [x] Persist scoring, player attribution, shots, rebounds, assists, steals, blocks, turnovers, and fouls.
 - [ ] Implement lineups, substitutions, timeouts, and configurable periods.
 - [x] Implement durable undo with an append-only correction trail.
-- [ ] Implement broader correction editing and game/shot clock recovery.
+- [x] Implement game/shot clocks, explicit time correction, and paused checkpoint recovery.
+- [x] Add default player jerseys/positions and supported v2 stat/clock hotkeys.
+- [ ] Implement broader stat correction editing.
 - [x] Prove committed stats survive close/reopen and failed writes roll back.
-- [ ] Exercise abrupt process interruption and system sleep during clock operation.
+- [x] Test running-checkpoint recovery and sleep/time discontinuity policies deterministically.
+- [ ] Exercise physical sleep, Force Quit and power interruption on both operating systems.
 
 ## Results and release
 

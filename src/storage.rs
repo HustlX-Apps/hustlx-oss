@@ -1,5 +1,9 @@
 //! Local catalog, immutable match rosters, and append-only match commands.
-use crate::{Game, Play, Player, Side, Stat, Team};
+use crate::{
+    Game, Play, Player, Side, Stat, Team,
+    clock::ClockState,
+    profile::{self, PlayerDetails, Position},
+};
 use chrono::NaiveDate;
 use directories::ProjectDirs;
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
@@ -59,6 +63,7 @@ pub struct RosterEntry {
     pub player_id: i64,
     pub name: String,
     pub jersey: String,
+    pub positions: Vec<Position>,
 }
 #[derive(Debug, Clone)]
 pub struct MatchDraft {
@@ -82,6 +87,7 @@ pub struct MatchSummary {
 pub struct SavedMatch {
     pub summary: MatchSummary,
     pub game: Game,
+    pub clock: ClockState,
 }
 #[derive(Debug)]
 pub struct Store {
@@ -128,8 +134,12 @@ impl Store {
                 tx.pragma_update(None, "application_id", APPLICATION_ID)?;
                 tx.pragma_update(None, "user_version", 1)?;
             }
-            1 if app == APPLICATION_ID => {}
+            1 | 2 if app == APPLICATION_ID => {}
             _ => return Err(Error::UnsupportedSchema),
+        }
+        if version < 2 {
+            tx.execute_batch(include_str!("migration_v2.sql"))?;
+            tx.pragma_update(None, "user_version", 2)?;
         }
         tx.commit()?;
         connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;")?;
@@ -140,6 +150,59 @@ impl Store {
     }
     pub fn create_player(&self, name: &str) -> Result<i64> {
         self.create_entry("players", name)
+    }
+    pub fn player_details(&self, id: i64) -> Result<PlayerDetails> {
+        Ok(self.connection.query_row(
+            "SELECT jersey,positions FROM players WHERE id=?1",
+            [id],
+            |r| {
+                Ok(PlayerDetails {
+                    jersey: r.get(0)?,
+                    positions: profile::decode(&r.get::<_, String>(1)?),
+                })
+            },
+        )?)
+    }
+    pub fn save_player(
+        &mut self,
+        id: Option<i64>,
+        name: &str,
+        jersey: &str,
+        positions: &[Position],
+    ) -> Result<i64> {
+        let name = required(name, "Name", 200)?;
+        let jersey = bounded(jersey, "Jersey", 12)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let positions = profile::encode(positions);
+        let id = if let Some(id) = id {
+            changed(tx.execute(
+                "UPDATE players SET name=?1,jersey=?2,positions=?3 WHERE id=?4",
+                params![name, jersey, positions, id],
+            )?)?;
+            id
+        } else {
+            tx.execute(
+                "INSERT INTO players(name,jersey,positions) VALUES(?1,?2,?3)",
+                params![name, jersey, positions],
+            )?;
+            tx.last_insert_rowid()
+        };
+        tx.commit()?;
+        Ok(id)
+    }
+    pub fn save_player_details(
+        &mut self,
+        id: i64,
+        jersey: &str,
+        positions: &[Position],
+    ) -> Result<()> {
+        let jersey = bounded(jersey, "Jersey", 12)?;
+        changed(self.connection.execute(
+            "UPDATE players SET jersey=?1,positions=?2 WHERE id=?3",
+            params![jersey, profile::encode(positions), id],
+        )?)
     }
     pub fn rename_team(&self, id: i64, name: &str) -> Result<()> {
         self.rename("teams", id, name)
@@ -224,9 +287,10 @@ impl Store {
         let away = active_name(&tx, "teams", draft.away_team_id)?;
         tx.execute("INSERT INTO matches(name,date,venue,home_team_id,away_team_id,home_name,away_name) VALUES (?1,?2,?3,?4,?5,?6,?7)",params![name,date,venue,draft.home_team_id,draft.away_team_id,home,away])?;
         let id = tx.last_insert_rowid();
+        tx.execute("INSERT INTO match_clocks(match_id) VALUES(?1)", [id])?;
         for (side, team_id) in [("home", draft.home_team_id), ("away", draft.away_team_id)] {
             for (order, p) in roster(&tx, team_id)?.into_iter().enumerate() {
-                tx.execute("INSERT INTO match_players(match_id,side,player_id,name,jersey,on_court,sort_order) VALUES (?1,?2,?3,?4,?5,?6,?7)",params![id,side,p.player_id,p.name,p.jersey,order<5,order as i64])?;
+                tx.execute("INSERT INTO match_players(match_id,side,player_id,name,jersey,on_court,sort_order,positions) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",params![id,side,p.player_id,p.name,p.jersey,order<5,order as i64,profile::encode(&p.positions)])?;
             }
         }
         let saved = load(&tx, id)?;
@@ -255,9 +319,23 @@ impl Store {
         player: i64,
         stat: Stat,
     ) -> Result<SavedMatch> {
+        self.record_with_clock(id, revision, command, side, player, stat, None)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_with_clock(
+        &mut self,
+        id: i64,
+        revision: i64,
+        command: Uuid,
+        side: Side,
+        player: i64,
+        stat: Stat,
+        clock: Option<ClockState>,
+    ) -> Result<SavedMatch> {
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        event_command_available(&tx, command)?;
         let side = side_key(side);
         let tag = stat_key(stat);
         let existing = tx
@@ -297,15 +375,28 @@ impl Store {
             return invalid("Select a player from this match's roster.");
         }
         tx.execute("INSERT INTO match_events(match_id,command_id,kind,side,player_id,stat) VALUES (?1,?2,'record',?3,?4,?5)",params![id,command.to_string(),side,player,tag])?;
+        if let Some(clock) = clock {
+            write_clock(&tx, id, clock)?;
+        }
         tx.execute("UPDATE matches SET revision=revision+1 WHERE id=?1", [id])?;
         let saved = load(&tx, id)?;
         tx.commit()?;
         Ok(saved)
     }
     pub fn undo(&mut self, id: i64, revision: i64, command: Uuid) -> Result<SavedMatch> {
+        self.undo_with_clock(id, revision, command, None)
+    }
+    pub fn undo_with_clock(
+        &mut self,
+        id: i64,
+        revision: i64,
+        command: Uuid,
+        clock: Option<ClockState>,
+    ) -> Result<SavedMatch> {
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        event_command_available(&tx, command)?;
         let existing = tx
             .query_row(
                 "SELECT match_id,kind FROM match_events WHERE command_id=?1",
@@ -333,6 +424,46 @@ impl Store {
             "INSERT INTO match_events(match_id,command_id,kind,target_id) VALUES (?1,?2,'undo',?3)",
             params![id, command.to_string(), target],
         )?;
+        if let Some(clock) = clock {
+            write_clock(&tx, id, clock)?;
+        }
+        tx.execute("UPDATE matches SET revision=revision+1 WHERE id=?1", [id])?;
+        let saved = load(&tx, id)?;
+        tx.commit()?;
+        Ok(saved)
+    }
+    pub fn save_clock(
+        &mut self,
+        id: i64,
+        revision: i64,
+        command: Uuid,
+        clock: ClockState,
+    ) -> Result<SavedMatch> {
+        clock.validate()?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let existing=tx.query_row("SELECT match_id,game_ms,shot_ms,period,running,shot_running FROM clock_commands WHERE command_id=?1",[command.to_string()],|r|Ok((r.get::<_,i64>(0)?,clock_row(r,1)?))).optional()?;
+        if let Some(existing) = existing {
+            if existing != (id, clock) {
+                return invalid("This save identifier already belongs to another clock command.");
+            }
+            return load(&tx, id);
+        }
+        let used: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM match_events WHERE command_id=?1)",
+            [command.to_string()],
+            |r| r.get(0),
+        )?;
+        if used {
+            return invalid("This save identifier already belongs to a stat command.");
+        }
+        let current = load(&tx, id)?;
+        if current.summary.revision != revision {
+            return Err(Error::Conflict);
+        }
+        write_clock(&tx, id, clock)?;
+        tx.execute("INSERT INTO clock_commands(command_id,match_id,game_ms,shot_ms,period,running,shot_running) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![command.to_string(),id,clock.game_ms as i64,clock.shot_ms as i64,clock.period,clock.running,clock.shot_running])?;
         tx.execute("UPDATE matches SET revision=revision+1 WHERE id=?1", [id])?;
         let saved = load(&tx, id)?;
         tx.commit()?;
@@ -373,13 +504,14 @@ fn active_name(db: &Connection, table: &str, id: i64) -> Result<String> {
     .ok_or_else(|| Error::Validation("Choose an existing, active team or player.".into()))
 }
 fn roster(db: &Connection, id: i64) -> Result<Vec<RosterEntry>> {
-    let mut stmt=db.prepare("SELECT p.id,p.name,tp.jersey FROM team_players tp JOIN players p ON p.id=tp.player_id WHERE tp.team_id=?1 AND p.archived=0 ORDER BY tp.rowid")?;
+    let mut stmt=db.prepare("SELECT p.id,p.name,CASE WHEN tp.jersey='' THEN p.jersey ELSE tp.jersey END,p.positions FROM team_players tp JOIN players p ON p.id=tp.player_id WHERE tp.team_id=?1 AND p.archived=0 ORDER BY tp.rowid")?;
     Ok(stmt
         .query_map([id], |r| {
             Ok(RosterEntry {
                 player_id: r.get(0)?,
                 name: r.get(1)?,
                 jersey: r.get(2)?,
+                positions: profile::decode(&r.get::<_, String>(3)?),
             })
         })?
         .collect::<rusqlite::Result<_>>()?)
@@ -428,13 +560,20 @@ fn load(db: &Connection, id: i64) -> Result<SavedMatch> {
             stat: parse_stat(&stat)?,
         });
     }
+    let clock = db.query_row(
+        "SELECT game_ms,shot_ms,period,running,shot_running FROM match_clocks WHERE match_id=?1",
+        [id],
+        |r| clock_row(r, 0),
+    )?;
+    clock.validate()?;
     Ok(SavedMatch {
         summary,
+        clock,
         game: Game::from_saved(teams, plays),
     })
 }
 fn load_players(db: &Connection, id: i64, side: &str) -> Result<Vec<Player>> {
-    let mut stmt=db.prepare("SELECT player_id,name,jersey,on_court FROM match_players WHERE match_id=?1 AND side=?2 ORDER BY sort_order")?;
+    let mut stmt=db.prepare("SELECT player_id,name,jersey,on_court,positions FROM match_players WHERE match_id=?1 AND side=?2 ORDER BY sort_order")?;
     Ok(stmt
         .query_map(params![id, side], |r| {
             Ok(Player {
@@ -442,6 +581,7 @@ fn load_players(db: &Connection, id: i64, side: &str) -> Result<Vec<Player>> {
                 name: r.get(1)?,
                 jersey: r.get(2)?,
                 on_court: r.get(3)?,
+                positions: profile::decode(&r.get::<_, String>(4)?),
             })
         })?
         .collect::<rusqlite::Result<_>>()?)
@@ -501,4 +641,29 @@ fn parse_stat(value: &str) -> Result<Stat> {
         "warning" => Ok(Stat::Warning),
         _ => invalid("Unsupported stat in saved match. Use a compatible application version."),
     }
+}
+
+fn clock_row(r: &rusqlite::Row<'_>, offset: usize) -> rusqlite::Result<ClockState> {
+    Ok(ClockState {
+        game_ms: r.get::<_, i64>(offset)? as u64,
+        shot_ms: r.get::<_, i64>(offset + 1)? as u64,
+        period: r.get(offset + 2)?,
+        running: r.get(offset + 3)?,
+        shot_running: r.get(offset + 4)?,
+    })
+}
+fn write_clock(db: &Connection, id: i64, clock: ClockState) -> Result<()> {
+    clock.validate()?;
+    changed(db.execute("UPDATE match_clocks SET game_ms=?1,shot_ms=?2,period=?3,running=?4,shot_running=?5 WHERE match_id=?6",params![clock.game_ms as i64,clock.shot_ms as i64,clock.period,clock.running,clock.shot_running,id])?)
+}
+fn event_command_available(db: &Connection, command: Uuid) -> Result<()> {
+    let used: bool = db.query_row(
+        "SELECT EXISTS(SELECT 1 FROM clock_commands WHERE command_id=?1)",
+        [command.to_string()],
+        |r| r.get(0),
+    )?;
+    if used {
+        return invalid("This save identifier already belongs to a clock command.");
+    }
+    Ok(())
 }

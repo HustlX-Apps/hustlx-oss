@@ -1,11 +1,19 @@
 use crate::brand::{self, BOLD, Colors, DISPLAY, HEADING, SEMIBOLD};
 use hustlx_oss::session::Session;
 use hustlx_oss::storage::{Entry, MatchSummary, RosterEntry, SavedMatch, Store};
-use hustlx_oss::{Game, Side, Stat};
+use hustlx_oss::{
+    Game, Side, Stat,
+    clock::{ClockCommand, ClockState},
+    hotkeys::Hotkeys,
+    profile::{PlayerDetails, Position},
+};
 use iced::widget::{
     Column, Container, Space, button, column, container, row, scrollable, svg, text,
 };
 use iced::{Border, Color, Element, Fill, Length, Theme, alignment};
+use std::{collections::BTreeMap, time::Instant};
+#[path = "clock_ui.rs"]
+mod clocks;
 #[path = "library_ui.rs"]
 mod library;
 
@@ -18,6 +26,27 @@ pub enum Screen {
 }
 #[derive(Debug, Clone)]
 pub enum Message {
+    Tick(Instant),
+    Clock(ClockCommand),
+    ToggleClock,
+    Key {
+        key: String,
+        repeat: bool,
+        modified: bool,
+        captured: bool,
+    },
+    Close(iced::window::Id),
+    CancelClose,
+    ClearKeys,
+    ToggleClockEditor,
+    GameTime(String),
+    ShotTime(String),
+    ApplyGameTime,
+    ApplyShotTime,
+    ToggleHotkeys,
+    DismissNotice,
+    PlayerJersey(String),
+    PlayerPosition(Position, bool),
     Select(Side, i64),
     Record(Stat),
     Undo,
@@ -72,6 +101,17 @@ pub struct App {
     roster_team: Option<Entry>,
     roster_player: Option<Entry>,
     jersey: String,
+    player_jersey: String,
+    player_positions: Vec<Position>,
+    details: BTreeMap<i64, PlayerDetails>,
+    now: Instant,
+    hotkeys: Hotkeys,
+    show_hotkeys: bool,
+    clock_edit: bool,
+    game_time: String,
+    shot_time: String,
+    notice: Option<String>,
+    closing: Option<iced::window::Id>,
 }
 impl Default for App {
     fn default() -> Self {
@@ -94,6 +134,17 @@ impl Default for App {
             roster_team: None,
             roster_player: None,
             jersey: String::new(),
+            player_jersey: String::new(),
+            player_positions: vec![],
+            details: BTreeMap::new(),
+            now: Instant::now(),
+            hotkeys: Hotkeys::default(),
+            show_hotkeys: false,
+            clock_edit: false,
+            game_time: String::new(),
+            shot_time: String::new(),
+            notice: None,
+            closing: None,
         };
         if let Err(error) = app.connect() {
             app.error = Some(error.to_string());
@@ -102,11 +153,12 @@ impl Default for App {
     }
 }
 impl App {
-    pub fn update(&mut self, message: Message) {
+    fn update_core(&mut self, message: Message) {
         let result = match message {
             Message::Select(side, id) => {
                 if let Some(s) = &mut self.session {
                     s.select(side, id);
+                    self.hotkeys.clear();
                 }
                 Ok(())
             }
@@ -172,7 +224,20 @@ impl App {
             nav = nav.push(
                 button(text("Game Day").size(12))
                     .on_press(Message::Navigate(Screen::GameDay))
+                    .style(if self.screen == Screen::GameDay {
+                        button::primary
+                    } else {
+                        brand::secondary
+                    })
                     .padding([8, 12]),
+            );
+        }
+        if self.screen == Screen::GameDay {
+            nav = nav.push(
+                button(text("Hotkeys ?").size(12))
+                    .on_press(Message::ToggleHotkeys)
+                    .padding([8, 12])
+                    .style(brand::secondary),
             );
         }
         nav = nav.push(Space::new().width(Fill)).push(
@@ -189,6 +254,15 @@ impl App {
             .style(brand::secondary),
         );
         let mut page = column![nav].spacing(14);
+        if let Some(notice) = &self.notice {
+            page = page.push(
+                row![
+                    text(notice).size(11).color(c.muted).width(Fill),
+                    button("Dismiss").on_press(Message::DismissNotice)
+                ]
+                .spacing(10),
+            );
+        }
         if let Some(error) = &self.error {
             let mut actions = row![text(error).size(12).color(c.red).width(Fill)]
                 .spacing(10)
@@ -197,6 +271,9 @@ impl App {
                 actions =
                     actions.push(button(text("Retry save").size(12)).on_press(Message::RetrySave));
             }
+            if self.closing.is_some() {
+                actions = actions.push(button("Keep app open").on_press(Message::CancelClose));
+            }
             page = page.push(card(actions, c).padding(10));
         }
         let body = if self.session.is_none() {
@@ -204,7 +281,13 @@ impl App {
                 text("Your existing data has not been replaced. Check the data folder, then retry.").size(14).color(c.muted),
                 button("Retry opening library").on_press(Message::RetryStorage)].spacing(18),c).width(Fill).height(Fill).into()
         } else if self.screen == Screen::GameDay && self.active().is_some() {
-            self.game_view(c)
+            if self.clock_edit {
+                self.clock_editor(c)
+            } else if self.show_hotkeys {
+                self.shortcut_guide(c)
+            } else {
+                self.game_view(c)
+            }
         } else {
             self.library_view(c)
         };
@@ -227,7 +310,7 @@ impl App {
                 text(if self.pending() {
                     "Retry the save, or reopen a match to discard the unsaved action."
                 } else {
-                    "Offline library. Game and shot clocks are still a preview."
+                    "Offline library. Clocks pause on close and reopen paused."
                 })
                 .size(11)
                 .color(c.muted),
@@ -324,29 +407,6 @@ impl App {
         .into()
     }
 
-    fn clock(&self, c: Colors) -> Element<'_, Message> {
-        column![
-            text("Q1  /  CLOCK PREVIEW").size(10).color(c.muted),
-            row![
-                column![
-                    text("24").size(32).font(DISPLAY).color(c.away),
-                    text("SHOT").size(9).color(c.muted)
-                ]
-                .align_x(alignment::Horizontal::Center),
-                text("10:00").size(60).font(DISPLAY),
-            ]
-            .spacing(14)
-            .align_y(alignment::Vertical::Center),
-            text("Game and shot clock controls are planned")
-                .size(11)
-                .color(c.muted),
-        ]
-        .spacing(4)
-        .align_x(alignment::Horizontal::Center)
-        .width(Length::FillPortion(4))
-        .into()
-    }
-
     fn roster(&self, side: Side, c: Colors) -> Element<'_, Message> {
         let team = self.game().team(side);
         let accent = if side == Side::Home { c.home } else { c.away };
@@ -379,6 +439,9 @@ impl App {
                         .width(38),
                     column![
                         text(&p.name).size(14).font(DISPLAY),
+                        text(hustlx_oss::profile::encode(&p.positions))
+                            .size(10)
+                            .color(c.muted),
                         text(format!(
                             "{} AST  /  {} REB",
                             stats.assists,
@@ -443,9 +506,19 @@ impl App {
             .game()
             .selected
             .and_then(|(side, id)| self.game().player(side, id));
-        let title = match target {
-            Some(player) => format!("Pad aimed at #{} {}", player.jersey, player.name),
-            None => "Select a player from either roster".to_owned(),
+        let title = if !self.hotkeys.digits().is_empty() || self.hotkeys.side().is_some() {
+            format!(
+                "{} #{}",
+                self.hotkeys
+                    .side()
+                    .map_or("Jersey", |s| if s == Side::Home { "Home" } else { "Away" }),
+                self.hotkeys.digits()
+            )
+        } else {
+            match target {
+                Some(player) => format!("Pad aimed at #{} {}", player.jersey, player.name),
+                None => "Select a player or type a jersey".to_owned(),
+            }
         };
         let pad = column![
             text(title).size(13).color(c.muted),
@@ -586,7 +659,7 @@ impl App {
                 .filter(|_| !self.pending())
                 .map(|_| Message::Record(stat)),
         )
-        .padding([9, 4])
+        .padding([8, 4])
         .width(Fill)
         .style(move |_, status| {
             let disabled = status == button::Status::Disabled;

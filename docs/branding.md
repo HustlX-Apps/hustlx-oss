@@ -10,7 +10,7 @@ The desktop app reuses the existing HustlX identity and ships its assets locally
 | Navigation | Inter SemiBold, 600 |
 | Stat buttons and small emphasis labels | Inter Bold, 700 |
 | Page headings and library titles | Exo Bold, 700 |
-| Game Day scores, clock preview, jerseys, team/player names | Exo Black, 900 |
+| Game Day scores, clocks, jerseys, team/player names | Exo Black, 900 |
 
 Register all five TTFs in `src/main.rs`; select roles through `src/brand.rs`. Use the actual family names declared by the files. In particular, the native static Black face declares **Exo Black**, rather than Exo with a different weight. The Inter static files all declare Inter, distinguished by their OS/2 weight classes. Do not substitute a system font or add network font loading.
 

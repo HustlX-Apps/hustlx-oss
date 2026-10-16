@@ -1,5 +1,8 @@
 //! Renderer-independent basketball state. SQLite owns durable local matches.
 
+pub mod clock;
+pub mod hotkeys;
+pub mod profile;
 pub mod session;
 pub mod storage;
 
@@ -90,6 +93,7 @@ pub struct Player {
     pub id: i64,
     pub name: String,
     pub jersey: String,
+    pub positions: Vec<profile::Position>,
     pub on_court: bool,
 }
 
@@ -125,6 +129,7 @@ impl Default for Game {
                         id: first_id + index as i64,
                         name: (*name).to_owned(),
                         jersey: jersey.to_string(),
+                        positions: vec![],
                         on_court: index < 5,
                     })
                     .collect(),

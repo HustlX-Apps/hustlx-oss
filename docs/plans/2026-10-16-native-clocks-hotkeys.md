@@ -19,8 +19,8 @@
 
 ## Checklist
 
-- [ ] Add failing clock, storage migration/profile, session recovery/failure, and keyboard resolution tests.
-- [ ] Implement schema 2 and Rust clocks/player metadata/atomic commands.
-- [ ] Wire native countdown, control/correction forms, graceful close, player forms, keyboard guide and guarded subscriptions.
-- [ ] Run automated checks and native clock/hotkey/player/reopen journey; document exact recovery and parity limits.
-- [ ] Push/update PR targeting develop with required risk evidence and assess Windows/macOS CI.
+- [x] Add failing clock, storage migration/profile, session recovery/failure, and keyboard resolution tests.
+- [x] Implement schema 2 and Rust clocks/player metadata/atomic commands.
+- [x] Wire native countdown, control/correction forms, graceful close, player forms, keyboard guide and guarded subscriptions.
+- [x] Run automated checks and native clock/hotkey/player/reopen journey; document exact recovery and parity limits.
+- [x] Push/update PR targeting develop with required risk evidence and assess Windows/macOS CI. Final results are recorded in the PR checks.

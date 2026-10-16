@@ -1,6 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod brand;
+mod native_quit;
 mod ui;
 
 fn main() -> iced::Result {
@@ -13,9 +14,11 @@ fn main() -> iced::Result {
         .font(include_bytes!("../assets/fonts/Exo-Black.ttf").as_slice())
         .default_font(brand::BODY)
         .theme(ui::App::theme)
+        .subscription(ui::App::subscription)
         .window(iced::window::Settings {
             size: iced::Size::new(1100.0, 760.0),
             min_size: Some(iced::Size::new(1100.0, 760.0)),
+            exit_on_close_request: false,
             ..Default::default()
         })
         .run()
