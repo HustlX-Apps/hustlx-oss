@@ -15,10 +15,10 @@
 
 ## Implementation
 
-- [ ] Copy official SVGs and native Inter Regular/SemiBold/Bold, Exo Bold/Black plus licenses; remove unused Fira Sans assets.
-- [ ] Register embedded fonts by their actual internal family names and weights. Use Inter for controls/body, Exo for headings, Exo Black for scores and entity names.
-- [ ] Add theme-aware wordmark plus compact OSS label to the navigation. Map control and page colors to HustlX light/navy/gold and dark/graphite/indigo tokens. Retain semantic stat colors.
-- [ ] Render Matches, Teams/Players, and saved Game Day at 1100x760 in both themes. Capture screenshots, inspect glyphs/weights, contrast, wrapping, and focusable forms.
-- [ ] Update asset provenance and docs. Run Cargo gates, required workspace verifier boundary, and merge flagger. Push PR update and assess Windows/macOS CI.
+- [x] Copy official SVGs and native Inter Regular/SemiBold/Bold, Exo Bold/Black plus licenses; remove unused Fira Sans assets.
+- [x] Register embedded fonts by their actual internal family names and weights. Use Inter for controls/body, Exo for headings, Exo Black for scores and entity names.
+- [x] Add theme-aware wordmark plus compact OSS label to the navigation. Map control and page colors to HustlX light/navy/gold and dark/graphite/indigo tokens. Retain semantic stat colors.
+- [x] Render Matches, Teams/Players, and saved Game Day at 1100x760 in both themes. Capture screenshots, inspect glyphs/weights, contrast, wrapping, and focusable forms.
+- [x] Update asset provenance and docs. Run Cargo gates, required workspace verifier boundary, and merge flagger. Push PR update and assess Windows/macOS CI.
 
 This is a reversible presentation/asset change. No implementation-mirroring UI tests are needed; native renders are required evidence. No network font loading, game-rule changes, or new sync scope.

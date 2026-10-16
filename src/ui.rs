@@ -1,19 +1,13 @@
+use crate::brand::{self, BOLD, Colors, DISPLAY, HEADING, SEMIBOLD};
 use hustlx_oss::session::Session;
 use hustlx_oss::storage::{Entry, MatchSummary, RosterEntry, SavedMatch, Store};
 use hustlx_oss::{Game, Side, Stat};
-use iced::widget::{Column, Container, Space, button, column, container, row, scrollable, text};
-use iced::{Border, Color, Element, Fill, Font, Length, Theme, alignment};
+use iced::widget::{
+    Column, Container, Space, button, column, container, row, scrollable, svg, text,
+};
+use iced::{Border, Color, Element, Fill, Length, Theme, alignment};
 #[path = "library_ui.rs"]
 mod library;
-
-const HOME: Color = Color::from_rgb(0.62, 0.57, 1.0);
-const AWAY: Color = Color::from_rgb(0.96, 0.81, 0.25);
-const GREEN: Color = Color::from_rgb(0.40, 0.80, 0.64);
-const RED: Color = Color::from_rgb(0.98, 0.42, 0.49);
-const BOLD: Font = Font {
-    weight: iced::font::Weight::Bold,
-    ..Font::with_name("Fira Sans")
-};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
@@ -107,20 +101,6 @@ impl Default for App {
         app
     }
 }
-#[derive(Clone, Copy)]
-struct Colors {
-    background: Color,
-    panel: Color,
-    row: Color,
-    border: Color,
-    text: Color,
-    muted: Color,
-    home: Color,
-    away: Color,
-    green: Color,
-    red: Color,
-}
-
 impl App {
     pub fn update(&mut self, message: Message) {
         let result = match message {
@@ -149,7 +129,7 @@ impl App {
         }
     }
     pub fn theme(&self) -> Theme {
-        if self.dark { Theme::Dark } else { Theme::Light }
+        brand::theme(self.dark)
     }
     fn pending(&self) -> bool {
         self.session.as_ref().is_some_and(Session::has_pending_save)
@@ -161,53 +141,30 @@ impl App {
         &self.active().expect("Game Day requires an open match").game
     }
     fn colors(&self) -> Colors {
-        if self.dark {
-            Colors {
-                background: rgb(16, 17, 20),
-                panel: rgb(24, 25, 29),
-                row: rgb(32, 33, 38),
-                border: rgb(48, 49, 57),
-                text: rgb(242, 243, 247),
-                muted: rgb(150, 154, 167),
-                home: HOME,
-                away: AWAY,
-                green: GREEN,
-                red: RED,
-            }
-        } else {
-            Colors {
-                background: rgb(241, 243, 248),
-                panel: Color::WHITE,
-                row: rgb(247, 248, 251),
-                border: rgb(219, 223, 232),
-                text: rgb(25, 28, 41),
-                muted: rgb(99, 106, 122),
-                home: rgb(83, 67, 172),
-                away: rgb(130, 102, 16),
-                green: rgb(36, 113, 83),
-                red: rgb(177, 50, 67),
-            }
-        }
+        Colors::new(self.dark)
     }
 
     pub fn view(&self) -> Element<'_, Message> {
         let c = self.colors();
-        let mut nav = row![text("HUSTLX").size(19).font(BOLD)]
-            .spacing(10)
-            .align_y(alignment::Vertical::Center);
+        let mut nav = row![
+            svg(brand::wordmark(self.dark)).width(100).height(28),
+            badge("OSS", c.away, c),
+        ]
+        .spacing(10)
+        .align_y(alignment::Vertical::Center);
         for (label, screen) in [
             ("Matches", Screen::Matches),
             ("Teams", Screen::Teams),
             ("Players", Screen::Players),
         ] {
             nav = nav.push(
-                button(text(label).size(12))
+                button(text(label).size(12).font(SEMIBOLD))
                     .on_press(Message::Navigate(screen))
                     .padding([8, 12])
                     .style(if self.screen == screen {
                         button::primary
                     } else {
-                        button::secondary
+                        brand::secondary
                     }),
             );
         }
@@ -229,7 +186,7 @@ impl App {
             )
             .on_press(Message::ToggleTheme)
             .padding([8, 12])
-            .style(button::secondary),
+            .style(brand::secondary),
         );
         let mut page = column![nav].spacing(14);
         if let Some(error) = &self.error {
@@ -243,7 +200,7 @@ impl App {
             page = page.push(card(actions, c).padding(10));
         }
         let body = if self.session.is_none() {
-            card(column![text("Your library could not be opened").size(24).font(BOLD),
+            card(column![text("Your library could not be opened").size(24).font(HEADING),
                 text("Your existing data has not been replaced. Check the data folder, then retry.").size(14).color(c.muted),
                 button("Retry opening library").on_press(Message::RetryStorage)].spacing(18),c).width(Fill).height(Fill).into()
         } else if self.screen == Screen::GameDay && self.active().is_some() {
@@ -294,7 +251,7 @@ impl App {
             column![
                 row![
                     column![
-                        text(&saved.summary.name).size(15).font(BOLD),
+                        text(&saved.summary.name).size(15).font(HEADING),
                         text(format!(
                             "{}  /  {}",
                             saved.summary.date,
@@ -349,11 +306,11 @@ impl App {
         column![
             text(self.game().team(side).name.to_uppercase())
                 .size(13)
-                .font(BOLD)
+                .font(HEADING)
                 .color(accent),
             text(format!("{:02}", self.game().score(side)))
                 .size(68)
-                .font(BOLD),
+                .font(DISPLAY),
             text(format!("{fouls} personal fouls"))
                 .size(12)
                 .color(c.muted),
@@ -372,11 +329,11 @@ impl App {
             text("Q1  /  CLOCK PREVIEW").size(10).color(c.muted),
             row![
                 column![
-                    text("24").size(32).font(BOLD).color(c.away),
+                    text("24").size(32).font(DISPLAY).color(c.away),
                     text("SHOT").size(9).color(c.muted)
                 ]
                 .align_x(alignment::Horizontal::Center),
-                text("10:00").size(60).font(BOLD),
+                text("10:00").size(60).font(DISPLAY),
             ]
             .spacing(14)
             .align_y(alignment::Vertical::Center),
@@ -394,7 +351,7 @@ impl App {
         let team = self.game().team(side);
         let accent = if side == Side::Home { c.home } else { c.away };
         let heading = row![
-            text(&team.name).size(16).font(BOLD),
+            text(&team.name).size(16).font(DISPLAY),
             Space::new().width(Fill),
             text(if side == Side::Home { "HOME" } else { "AWAY" })
                 .size(10)
@@ -417,11 +374,11 @@ impl App {
                 let content = row![
                     text(jersey_label(&p.jersey))
                         .size(25)
-                        .font(BOLD)
+                        .font(DISPLAY)
                         .color(accent)
                         .width(38),
                     column![
-                        text(&p.name).size(14).font(BOLD),
+                        text(&p.name).size(14).font(DISPLAY),
                         text(format!(
                             "{} AST  /  {} REB",
                             stats.assists,
@@ -432,7 +389,7 @@ impl App {
                     ]
                     .spacing(4)
                     .width(Fill),
-                    text(stats.points).size(22).font(BOLD),
+                    text(stats.points).size(22).font(DISPLAY),
                     text(format!("PF {}", stats.fouls)).size(10).color(c.muted),
                 ]
                 .spacing(8)
@@ -535,11 +492,11 @@ impl App {
             .on_press_maybe(
                 (!self.game().plays().is_empty() && !self.pending()).then_some(Message::Undo),
             )
-            .style(button::secondary);
+            .style(brand::secondary);
         let mut feed = Column::new().spacing(8);
         if self.game().plays().is_empty() {
             feed = feed.push(container(column![
-                text("Ready for the first play").size(18).font(BOLD),
+                text("Ready for the first play").size(18).font(HEADING),
                 text("Select a player, then record a shot or stat.\nYour saved plays will appear here.").size(13).color(c.muted),
             ].spacing(10)).padding([24, 8]));
         }
@@ -572,7 +529,7 @@ impl App {
                             String::new()
                         })
                         .size(17)
-                        .font(BOLD)
+                        .font(HEADING)
                         .color(accent),
                     ]
                     .spacing(8)
@@ -687,10 +644,6 @@ fn badge<'a>(label: &'a str, accent: Color, c: Colors) -> Element<'a, Message> {
                 })
         })
         .into()
-}
-
-fn rgb(r: u8, g: u8, b: u8) -> Color {
-    Color::from_rgb8(r, g, b)
 }
 
 fn blend(base: Color, accent: Color, amount: f32) -> Color {

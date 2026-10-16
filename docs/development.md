@@ -70,6 +70,7 @@ Integration tests use temporary databases for unknown identities, invalid dates,
 - `src/lib.rs`: renderer-independent match/stat projections. Synthetic defaults support tests only.
 - `src/schema.sql`, `src/storage.rs`: schema version 1, catalog operations, roster snapshots, transactional event commands.
 - `src/session.rs`: commit-before-display state and pending retries.
+- `src/brand.rs`: embedded wordmarks, Inter/Exo font roles, and light/dark palettes. See [branding](branding.md).
 - `src/main.rs`, `src/ui.rs`, `src/library_ui.rs`: native entry point, Game Day console, and library forms.
 - `tests/preview.rs`, `tests/storage.rs`: domain and persistence/session tests.
 - `docs/references/`: original web screenshots, separate from native evidence.

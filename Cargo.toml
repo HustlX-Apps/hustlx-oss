@@ -13,7 +13,7 @@ desktop = ["dep:iced"]
 [dependencies]
 chrono = "0.4"
 directories = "6"
-iced = { version = "0.14", optional = true, default-features = false, features = ["wgpu", "tiny-skia", "crisp", "thread-pool"] }
+iced = { version = "0.14", optional = true, default-features = false, features = ["wgpu", "tiny-skia", "crisp", "thread-pool", "svg"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 uuid = { version = "1", features = ["v4"] }
 

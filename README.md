@@ -4,6 +4,8 @@ Offline-first basketball Game Day for Windows and macOS, built around a Rust cor
 
 **Status:** native Rust application in development. The Iced interface now supports a SQLite team/player library, roster editing, match creation and reopening, and durable stat entry/undo. Game/shot clocks, substitutions, exports, and installers remain planned. The project license still needs a maintainer decision.
 
+The interface uses the official HustlX wordmarks, Inter body text, Exo headings and Exo Black scores, bundled for offline use. See [branding](docs/branding.md).
+
 ## What we are building
 
 - Manage teams, players, and rosters on your computer.
@@ -24,9 +26,9 @@ Run `cargo run --locked`, then:
 
 Team and player names and rosters are copied into each new match. Later library edits preserve its history. The library starts empty; screenshots use synthetic test data.
 
-![Saved native match reopened after restart](docs/evidence/sqlite-library/reopened-match.jpg)
+![Saved native match reopened after restart](docs/evidence/hustlx-branding/game-day-dark.jpg)
 
-[Match library](docs/evidence/sqlite-library/matches.jpg), [light theme](docs/evidence/sqlite-library/reopened-match-light.jpg), and [verification evidence](docs/evidence/sqlite-library/README.md). See [local storage](docs/storage.md) for data locations and save/retry behavior.
+[Match library](docs/evidence/hustlx-branding/matches-dark.jpg), [light theme](docs/evidence/hustlx-branding/game-day-light.jpg), and [current visual evidence](docs/evidence/hustlx-branding/README.md). [SQLite verification](docs/evidence/sqlite-library/README.md) records the original create/restart journey. See [local storage](docs/storage.md) for data locations and save/retry behavior.
 
 ## Web UI reference
 
@@ -42,6 +44,7 @@ Install Rust with [rustup](https://rustup.rs/), then run `cargo run --locked`. S
 
 ## Documentation
 
+- [Branding](docs/branding.md): wordmarks, typography, palettes, and asset provenance.
 - [Product brief](docs/product-brief.md): confirmed scope and open decisions.
 - [Architecture](docs/architecture-proposal.md): implemented Rust/SQLite boundaries and proposed clocks/sync.
 - [Local storage](docs/storage.md): schema, data paths, snapshots, and failure handling.

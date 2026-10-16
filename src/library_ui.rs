@@ -240,7 +240,7 @@ impl App {
             .cloned()
             .collect::<Vec<_>>();
         let form=column![
-            text("Create a match").size(23).font(BOLD),
+            text("Create a match").size(23).font(HEADING),
             text("Choose your teams and save a local game.").size(12).color(c.muted),
             field("Match name",text_input("Friday basketball",&f.name).on_input(Message::MatchName).padding(10).into(),c),
             field("Date / YYYY-MM-DD",text_input("2026-10-16",&f.date).on_input(Message::MatchDate).padding(10).into(),c),
@@ -253,7 +253,7 @@ impl App {
         ].spacing(16);
         let mut list = column![
             row![
-                text("Your matches").size(23).font(BOLD),
+                text("Your matches").size(23).font(HEADING),
                 Space::new().width(Fill),
                 button(text("Refresh").size(12)).on_press(Message::Refresh)
             ]
@@ -274,7 +274,7 @@ impl App {
             list = list.push(card(
                 row![
                     column![
-                        text(&m.name).size(17).font(BOLD),
+                        text(&m.name).size(17).font(HEADING),
                         text(format!("{} vs {}", m.home_name, m.away_name)).size(14),
                         text(format!(
                             "{} / {}",
@@ -326,7 +326,7 @@ impl App {
             controls = controls.push(button("Cancel").on_press(Message::CancelTeam));
         }
         let mut list = column![
-            text("Teams").size(23).font(BOLD),
+            text("Teams").size(23).font(HEADING),
             text_input("Team name", &self.team_name)
                 .on_input(Message::TeamName)
                 .on_submit(Message::SaveTeam)
@@ -346,7 +346,7 @@ impl App {
                         if team.archived { " (archived)" } else { "" }
                     ))
                     .size(16)
-                    .font(BOLD),
+                    .font(HEADING),
                     row![
                         button(text("Rename").size(11)).on_press(Message::EditTeam(team.id)),
                         button(text(if team.archived { "Restore" } else { "Archive" }).size(11))
@@ -381,7 +381,7 @@ impl App {
             .cloned()
             .collect::<Vec<_>>();
         let mut roster = column![
-            text("Team roster").size(23).font(BOLD),
+            text("Team roster").size(23).font(HEADING),
             pick_list(choices, self.roster_team.as_ref(), Message::RosterTeam)
                 .placeholder("Choose a team")
                 .width(Fill)
@@ -429,7 +429,7 @@ impl App {
                     row![
                         text(jersey_label(&p.jersey))
                             .size(22)
-                            .font(BOLD)
+                            .font(HEADING)
                             .color(c.home)
                             .width(45),
                         text(&p.name).size(15).width(Fill),
@@ -469,13 +469,13 @@ impl App {
         if self.editing_player.is_some() {
             controls = controls.push(button("Cancel").on_press(Message::CancelPlayer));
         }
-        let form=column![text(if self.editing_player.is_some(){"Edit player"}else{"Add a player"}).size(23).font(BOLD),
+        let form=column![text(if self.editing_player.is_some(){"Edit player"}else{"Add a player"}).size(23).font(HEADING),
             text("Players can be reused across team rosters.").size(12).color(c.muted),
             field("Player name",text_input("Full name",&self.player_name).on_input(Message::PlayerName).on_submit(Message::SavePlayer).padding(10).into(),c),controls,
             text("Set jersey labels in each team's roster. Archiving hides a player from new match rosters and can be reversed.").size(12).color(c.muted),
         ].spacing(16);
         let mut list = column![
-            text("Player library").size(23).font(BOLD),
+            text("Player library").size(23).font(HEADING),
             checkbox(self.show_players)
                 .label("Show archived players")
                 .on_toggle(Message::ShowPlayers)
@@ -496,7 +496,7 @@ impl App {
             list = list.push(card(
                 row![
                     column![
-                        text(&p.name).size(17).font(BOLD),
+                        text(&p.name).size(17).font(HEADING),
                         text(format!(
                             "Player #{}{}",
                             p.id,
@@ -537,7 +537,7 @@ fn field<'a>(label: &'a str, input: Element<'a, Message>, c: Colors) -> Element<
 fn empty<'a>(title: &'a str, description: &'a str, c: Colors) -> Element<'a, Message> {
     container(
         column![
-            text(title).size(18).font(BOLD),
+            text(title).size(18).font(HEADING),
             text(description).size(13).color(c.muted)
         ]
         .spacing(10),
