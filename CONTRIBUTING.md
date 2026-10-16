@@ -1,6 +1,6 @@
 # Contributing
 
-This project is in discovery. Maintainers need to select a license before accepting outside code contributions.
+This project has a native Rust preview. Maintainers need to select a license before accepting outside code contributions.
 
 Start with the [product brief](docs/product-brief.md), [architecture proposal](docs/architecture-proposal.md), and [roadmap](docs/roadmap.md). Keep proposals and planned behavior clearly distinguished from implemented and verified behavior.
 
@@ -10,4 +10,4 @@ Keep game operation offline, preserve historical identities, and never introduce
 
 Do not copy private HustlX source, credentials, match records, or unlicensed assets into this repository. Use synthetic data for examples and screenshots. Never commit local databases, exports containing personal data, `.env` files, access tokens, or signing credentials.
 
-Build commands, formatting commands, and automated checks will be documented when the runtime stack is approved and scaffolded.
+Build commands, formatting commands, automated checks, and preview limitations are documented in [development](docs/development.md).

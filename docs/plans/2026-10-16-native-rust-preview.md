@@ -32,11 +32,11 @@ Commit and push the feature branch, open a PR targeting `develop`, attach it to 
 
 ## Open checklist
 
-- [ ] Rust decision and architecture docs updated.
-- [ ] Behavioral tests fail before domain implementation and pass after it.
-- [ ] Native preview compiled and exercised locally.
-- [ ] Format, tests, Clippy, build, and shared verification results recorded.
-- [ ] Native screenshot, docs, and PR available for review.
+- [x] Rust decision and architecture docs updated.
+- [x] Behavioral tests fail before domain implementation and pass after it.
+- [x] Native preview compiled and exercised locally.
+- [x] Format, tests, Clippy, build, and shared verification results recorded.
+- [x] Native screenshots and docs prepared for PR handoff.
 
 ## Next slice
 

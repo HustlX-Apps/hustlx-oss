@@ -1,0 +1,19 @@
+[package]
+name = "hustlx-oss"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Offline-first basketball Game Day desktop application"
+repository = "https://github.com/HustlX-Apps/hustlx-oss"
+
+[features]
+default = ["desktop"]
+desktop = ["dep:iced"]
+
+[dependencies]
+iced = { version = "0.14", optional = true, default-features = false, features = ["wgpu", "tiny-skia", "crisp", "thread-pool"] }
+
+[[bin]]
+name = "hustlx-oss"
+path = "src/main.rs"
+required-features = ["desktop"]

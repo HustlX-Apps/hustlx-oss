@@ -1,22 +1,26 @@
 # Architecture proposal
 
-Status: proposed, pending maintainer approval. No runtime code has been scaffolded.
+Status: Rust-rendered UI throughout was selected by the user on October 16, 2026. Iced is the initial toolkit. The persistence and production clock design below remains proposed. The first implementation is a deliberately in-memory sample console.
 
-## Options
+## UI decision
 
-| Approach | Benefit | Tradeoff |
+The UI must be written in Rust and rendered by the desktop application. Use Iced 0.14 with custom widgets/styles to follow the existing v2 console. Keep the domain model independent of Iced. There is no webview or JavaScript runtime.
+
+| Rust UI option | Fit | Tradeoff |
 | --- | --- | --- |
-| Tauri 2 + Rust + SQLite + Vue | Keeps Rust responsible for local game operations while using familiar web styling to closely match Game Day v2 | UI is Vue/TypeScript; Windows and macOS webviews need separate validation |
-| Rust-rendered UI + SQLite | Uses Rust for the interface as well as domain logic | Requires rebuilding the Vue/CSS presentation and more work to match the existing console |
+| Iced, selected for the first build | Rust widgets, custom styling, and explicit message/update/view boundaries | The v2 presentation must be recreated; the framework is still evolving |
+| egui with eframe | Straightforward immediate-mode Rust UI and custom painting | Would require more deliberate styling to move away from a tooling interface |
 
-Recommendation: Tauri 2 with Vue, TypeScript, and a Rust domain core. Tauri supports Rust logic with HTML/CSS/JavaScript frontends and desktop distribution. This is an architectural recommendation, not a claim of built or tested platform support.
+References checked October 16, 2026: [Iced 0.14 documentation](https://docs.rs/iced/0.14.0/iced/) and [egui repository](https://github.com/emilk/egui). Framework support is not evidence that our Windows/macOS builds have passed.
 
-References checked October 16, 2026: [Tauri overview](https://v2.tauri.app/start/) and [distribution](https://v2.tauri.app/distribute/).
+## First implementation boundary
+
+`src/lib.rs` owns a synthetic match, stable player IDs, event-derived player/team statistics, and reversible preview actions. `src/ui.rs` owns the Iced interface. The preview uses memory only, displays its unsaved state persistently, and shows a fixed clock marked as a preview. It does not claim production game-day operation, clock reliability, or durable storage. License selection remains pending.
 
 ## Proposed boundaries
 
 - **Desktop UI:** teams, players, match library, setup, Game Day console, and local results. Package assets with the app and use no hosted page as the application shell.
-- **Rust domain core:** match commands, score/stat projections, lineups, undo/corrections, and clock state. Keep domain behavior testable without a webview.
+- **Rust domain core:** match commands, score/stat projections, lineups, undo/corrections, and clock state. Keep domain behavior testable without the renderer.
 - **Rust persistence:** SQLite transactions, versioned migrations, match-time roster snapshots, and export/backup operations. The UI should not write arbitrary SQL or arbitrary filesystem paths.
 - **Future sync adapter:** a separate optional integration. No network call belongs in the local command commit path.
 
@@ -26,7 +30,7 @@ Proposed records are players, teams, roster memberships, matches, match roster s
 
 A UI action should call a typed Rust command. Validate the command against local state, atomically store its event and resulting state, then return the committed projection to the UI. An action identifier should prevent accidental duplicate application during retries. Corrections must preserve the original audit trail.
 
-SQLite is the proposed durable source of truth. Browser storage should not be the only match record. Define schema migrations and backup/restore compatibility before users accumulate real data.
+SQLite is the proposed durable source of truth. The in-memory preview is not a match record and must be replaced by durable storage before real game use. Define schema migrations and backup/restore compatibility before users accumulate real data.
 
 ## Clock and recovery
 

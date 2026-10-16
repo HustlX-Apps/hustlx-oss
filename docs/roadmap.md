@@ -7,8 +7,15 @@ Each slice should produce a reviewable change, matching documentation, and evide
 - [x] Create an independent local repository named hustlx-oss.
 - [x] Record the initial scope and proposed architecture.
 - [x] Capture dark and light references from the real web v2 components with sample data.
-- [ ] Approve the desktop stack and open-source license.
-- [ ] Scaffold the application and establish formatting, tests, and Windows/macOS build jobs.
+- [x] Select Rust-rendered UI throughout. Use Iced for the first native build.
+- [ ] Select the open-source license.
+- [x] Scaffold the application and establish formatting, tests, and Windows/macOS build jobs. CI results must be checked separately from configuration.
+
+## Native preview
+
+- [x] Render the scoreboard, roster panels, stat pad, and play-by-play natively in Rust.
+- [x] Exercise player selection, event-derived statistics, undo, and light/dark themes.
+- [x] Capture the actual native window and record [local verification](evidence/native-preview/README.md).
 
 ## Local library
 
