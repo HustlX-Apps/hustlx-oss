@@ -27,7 +27,8 @@ Each slice should produce a reviewable change, matching documentation, and evide
 
 - [x] Reproduce the v2 scoreboard and three-column console in both themes.
 - [x] Persist scoring, player attribution, shots, rebounds, assists, steals, blocks, turnovers, and fouls.
-- [ ] Implement lineups, substitutions, timeouts, and configurable periods.
+- [x] Implement explicit starting lineups, confirmed substitutions and saved lineup history.
+- [ ] Implement timeouts and configurable periods.
 - [x] Implement durable undo with an append-only correction trail.
 - [x] Implement game/shot clocks, explicit time correction, and paused checkpoint recovery.
 - [x] Add default player jerseys/positions and supported v2 stat/clock hotkeys.

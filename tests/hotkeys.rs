@@ -71,7 +71,7 @@ fn repeated_modified_captured_and_offscreen_keys_never_trigger() {
             None
         );
     }
-    assert_eq!(press(&mut h, "x"), None);
+    assert_eq!(press(&mut h, "x"), Some(Action::Substitutions));
     assert_eq!(press(&mut h, "o"), None);
 }
 #[test]
@@ -129,4 +129,36 @@ fn duplicate_jerseys_require_explicit_team_selection() {
     assert_eq!(keys.target(&game).unwrap(), (Side::Home, p));
     press(&mut keys, ".");
     assert_eq!(keys.target(&game).unwrap(), (Side::Away, q));
+}
+
+#[test]
+fn substitution_shortcut_uses_existing_input_guards() {
+    let mut keys = Hotkeys::default();
+    assert_eq!(
+        keys.press(Input {
+            key: "x",
+            enabled: true,
+            repeat: false,
+            modified: false,
+            captured: false
+        }),
+        Some(Action::Substitutions)
+    );
+    for (repeat, modified, captured, enabled) in [
+        (true, false, false, true),
+        (false, true, false, true),
+        (false, false, true, true),
+        (false, false, false, false),
+    ] {
+        assert_eq!(
+            keys.press(Input {
+                key: "x",
+                enabled,
+                repeat,
+                modified,
+                captured
+            }),
+            None
+        );
+    }
 }

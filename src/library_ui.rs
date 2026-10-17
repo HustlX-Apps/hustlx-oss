@@ -80,6 +80,8 @@ impl App {
                 if screen != Screen::GameDay && !self.pending() {
                     self.session_mut()?.pause_for_close_at(Instant::now())?;
                 }
+                self.lineup_draft = None;
+                self.lineup_history = false;
                 self.hotkeys.clear();
                 self.clock_edit = false;
                 self.show_hotkeys = false;
@@ -90,6 +92,12 @@ impl App {
             Message::RetryStorage => self.connect()?,
             Message::OpenMatch(id) => {
                 self.session_mut()?.open(id)?;
+                self.lineup_draft = None;
+                self.lineup_history = false;
+                self.lineup_saving = false;
+                self.clock_edit = false;
+                self.show_hotkeys = false;
+                self.hotkeys.clear();
                 self.screen = Screen::GameDay;
             }
             Message::CreateMatch => {
@@ -108,6 +116,12 @@ impl App {
                     away_team_id: f.away.as_ref().map_or(0, |t| t.id),
                 };
                 self.session_mut()?.create(&draft)?;
+                self.lineup_draft = None;
+                self.lineup_history = false;
+                self.lineup_saving = false;
+                self.clock_edit = false;
+                self.show_hotkeys = false;
+                self.hotkeys.clear();
                 self.match_form = MatchForm::default();
                 self.screen = Screen::GameDay;
             }

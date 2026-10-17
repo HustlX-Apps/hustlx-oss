@@ -115,6 +115,8 @@ impl App {
                 )),
             },
             Message::ToggleClockEditor => {
+                self.lineup_draft = None;
+                self.lineup_history = false;
                 let result = self.apply_clock(ClockCommand::Pause);
                 if result.is_ok() {
                     self.clock_edit = !self.clock_edit;
@@ -127,6 +129,8 @@ impl App {
                 result
             }
             Message::ToggleHotkeys => {
+                self.lineup_draft = None;
+                self.lineup_history = false;
                 self.show_hotkeys = !self.show_hotkeys;
                 self.clock_edit = false;
                 self.hotkeys.clear();
@@ -155,6 +159,11 @@ impl App {
         self.finish_update()
     }
     fn finish_update(&mut self) -> Task<Message> {
+        if self.lineup_saving && !self.pending() {
+            self.lineup_draft = None;
+            self.lineup_saving = false;
+            self.hotkeys.clear();
+        }
         if let Some(notice) = self.session.as_mut().and_then(Session::take_clock_notice) {
             self.notice = Some(notice);
         }
@@ -178,6 +187,14 @@ impl App {
         modified: bool,
         captured: bool,
     ) -> Task<Message> {
+        if (self.lineup_draft.is_some() || self.lineup_history)
+            && !repeat
+            && !modified
+            && !captured
+            && key == "Escape"
+        {
+            return self.update(Message::CancelLineup);
+        }
         if self.show_hotkeys && !repeat && !modified && !captured && (key == "?" || key == "Escape")
         {
             self.show_hotkeys = false;
@@ -187,7 +204,9 @@ impl App {
             && self.active().is_some()
             && !self.pending()
             && !self.clock_edit
-            && !self.show_hotkeys;
+            && !self.show_hotkeys
+            && self.lineup_draft.is_none()
+            && !self.lineup_history;
         let action = self.hotkeys.press(Input {
             key,
             enabled,
@@ -211,6 +230,29 @@ impl App {
             Some(Action::ToggleClock) => return self.update(Message::ToggleClock),
             Some(Action::Clock(command)) => return self.update(Message::Clock(command)),
             Some(Action::Undo) => return self.update(Message::Undo),
+            Some(Action::Substitutions) => {
+                let side = if self.hotkeys.digits().is_empty() {
+                    self.hotkeys
+                        .side()
+                        .or_else(|| self.game().selected.map(|p| p.0))
+                } else {
+                    match self.hotkeys.target(self.game()) {
+                        Ok((side, _)) => Some(side),
+                        Err(error) => {
+                            self.error = Some(error);
+                            return self.finish_update();
+                        }
+                    }
+                };
+                if let Some(side) = side {
+                    return self.update(Message::OpenLineup(
+                        side,
+                        hustlx_oss::lineup::LineupKind::Substitution,
+                    ));
+                }
+                self.error =
+                    Some("Select a player, or press , for home or . for away, then X.".into());
+            }
             Some(Action::Help) => return self.update(Message::ToggleHotkeys),
             Some(Action::Clear) => {
                 if let Some(s) = &mut self.session {
@@ -226,7 +268,7 @@ impl App {
         let now = self.now;
         self.session_mut()?.command_at(command, now)
     }
-    fn current_clock(&self) -> ClockState {
+    pub(super) fn current_clock(&self) -> ClockState {
         self.session
             .as_ref()
             .map_or_else(ClockState::default, |s| s.clock_at(self.now))
@@ -330,7 +372,7 @@ impl App {
    text("T: turnover     V: steal     B: block     Backspace: undo last play").size(15),
    text("Type a jersey (00 is supported), then a shot/stat key. Comma selects home; period selects away. You can also select a player with the mouse. Duplicate jerseys require an explicit team or player selection.").size(14),
    text("Escape clears jersey/player selection. Backspace edits a typed jersey before it undoes a play. Numpad / + * - map to FT made, 2PT made, 3PT made, 2PT miss.").size(13).color(c.muted),
-   text("Scoring shortcuts are disabled in this guide, in time fields, outside Game Day, and while a save is pending. Held-key repeats and Ctrl/Command/Alt combinations are ignored. Substitution and timeout keys remain unbound until those workflows exist.").size(12).color(c.muted),
+   text("Scoring shortcuts are disabled in this guide, in time fields, outside Game Day, and while a save is pending. Held-key repeats and Ctrl/Command/Alt combinations are ignored. X opens the substitution board for a selected player or explicit team. Timeout O remains unbound.").size(12).color(c.muted),
   ].spacing(16),c).width(Fill).height(Fill).into()
     }
 }

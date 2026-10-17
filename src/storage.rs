@@ -13,6 +13,8 @@ use std::{
     time::Duration,
 };
 use uuid::Uuid;
+#[path = "lineup_storage.rs"]
+mod lineups;
 const APPLICATION_ID: i64 = 0x48584f53;
 
 #[derive(Debug)]
@@ -88,6 +90,7 @@ pub struct SavedMatch {
     pub summary: MatchSummary,
     pub game: Game,
     pub clock: ClockState,
+    pub lineups: Vec<crate::lineup::LineupChange>,
 }
 #[derive(Debug)]
 pub struct Store {
@@ -134,12 +137,16 @@ impl Store {
                 tx.pragma_update(None, "application_id", APPLICATION_ID)?;
                 tx.pragma_update(None, "user_version", 1)?;
             }
-            1 | 2 if app == APPLICATION_ID => {}
+            1..=3 if app == APPLICATION_ID => {}
             _ => return Err(Error::UnsupportedSchema),
         }
         if version < 2 {
             tx.execute_batch(include_str!("migration_v2.sql"))?;
             tx.pragma_update(None, "user_version", 2)?;
+        }
+        if version < 3 {
+            tx.execute_batch(include_str!("migration_v3.sql"))?;
+            tx.pragma_update(None, "user_version", 3)?;
         }
         tx.commit()?;
         connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;")?;
@@ -290,7 +297,7 @@ impl Store {
         tx.execute("INSERT INTO match_clocks(match_id) VALUES(?1)", [id])?;
         for (side, team_id) in [("home", draft.home_team_id), ("away", draft.away_team_id)] {
             for (order, p) in roster(&tx, team_id)?.into_iter().enumerate() {
-                tx.execute("INSERT INTO match_players(match_id,side,player_id,name,jersey,on_court,sort_order,positions) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",params![id,side,p.player_id,p.name,p.jersey,order<5,order as i64,profile::encode(&p.positions)])?;
+                tx.execute("INSERT INTO match_players(match_id,side,player_id,name,jersey,on_court,sort_order,positions) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",params![id,side,p.player_id,p.name,p.jersey,false,order as i64,profile::encode(&p.positions)])?;
             }
         }
         let saved = load(&tx, id)?;
@@ -443,6 +450,7 @@ impl Store {
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        lineups::command_available(&tx, command)?;
         let existing=tx.query_row("SELECT match_id,game_ms,shot_ms,period,running,shot_running FROM clock_commands WHERE command_id=?1",[command.to_string()],|r|Ok((r.get::<_,i64>(0)?,clock_row(r,1)?))).optional()?;
         if let Some(existing) = existing {
             if existing != (id, clock) {
@@ -569,6 +577,7 @@ fn load(db: &Connection, id: i64) -> Result<SavedMatch> {
     Ok(SavedMatch {
         summary,
         clock,
+        lineups: lineups::history(db, id)?,
         game: Game::from_saved(teams, plays),
     })
 }
@@ -657,6 +666,7 @@ fn write_clock(db: &Connection, id: i64, clock: ClockState) -> Result<()> {
     changed(db.execute("UPDATE match_clocks SET game_ms=?1,shot_ms=?2,period=?3,running=?4,shot_running=?5 WHERE match_id=?6",params![clock.game_ms as i64,clock.shot_ms as i64,clock.period,clock.running,clock.shot_running,id])?)
 }
 fn event_command_available(db: &Connection, command: Uuid) -> Result<()> {
+    lineups::command_available(db, command)?;
     let used: bool = db.query_row(
         "SELECT EXISTS(SELECT 1 FROM clock_commands WHERE command_id=?1)",
         [command.to_string()],

@@ -16,6 +16,8 @@ use std::{collections::BTreeMap, time::Instant};
 mod clocks;
 #[path = "library_ui.rs"]
 mod library;
+#[path = "lineup_ui.rs"]
+mod lineups;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
@@ -26,6 +28,13 @@ pub enum Screen {
 }
 #[derive(Debug, Clone)]
 pub enum Message {
+    OpenLineup(Side, hustlx_oss::lineup::LineupKind),
+    CancelLineup,
+    LineupPick(i64),
+    LineupRemove(i64),
+    ClearLineup,
+    SaveLineup,
+    ShowLineupHistory,
     Tick(Instant),
     Clock(ClockCommand),
     ToggleClock,
@@ -112,6 +121,9 @@ pub struct App {
     shot_time: String,
     notice: Option<String>,
     closing: Option<iced::window::Id>,
+    lineup_draft: Option<hustlx_oss::lineup::LineupDraft>,
+    lineup_history: bool,
+    lineup_saving: bool,
 }
 impl Default for App {
     fn default() -> Self {
@@ -145,6 +157,9 @@ impl Default for App {
             shot_time: String::new(),
             notice: None,
             closing: None,
+            lineup_draft: None,
+            lineup_history: false,
+            lineup_saving: false,
         };
         if let Err(error) = app.connect() {
             app.error = Some(error.to_string());
@@ -155,6 +170,13 @@ impl Default for App {
 impl App {
     fn update_core(&mut self, message: Message) {
         let result = match message {
+            message @ (Message::OpenLineup(..)
+            | Message::CancelLineup
+            | Message::LineupPick(..)
+            | Message::LineupRemove(..)
+            | Message::ClearLineup
+            | Message::SaveLineup
+            | Message::ShowLineupHistory) => self.update_lineups(message),
             Message::Select(side, id) => {
                 if let Some(s) = &mut self.session {
                     s.select(side, id);
@@ -281,7 +303,11 @@ impl App {
                 text("Your existing data has not been replaced. Check the data folder, then retry.").size(14).color(c.muted),
                 button("Retry opening library").on_press(Message::RetryStorage)].spacing(18),c).width(Fill).height(Fill).into()
         } else if self.screen == Screen::GameDay && self.active().is_some() {
-            if self.clock_edit {
+            if self.lineup_draft.is_some() {
+                self.lineup_editor(c)
+            } else if self.lineup_history {
+                self.lineup_history_view(c)
+            } else if self.clock_edit {
                 self.clock_editor(c)
             } else if self.show_hotkeys {
                 self.shortcut_guide(c)
@@ -349,6 +375,9 @@ impl App {
                     ]
                     .spacing(4)
                     .width(Fill),
+                    button(text("Lineup history").size(11))
+                        .on_press(Message::ShowLineupHistory)
+                        .style(brand::secondary),
                     badge("LOCAL MATCH", c.green, c)
                 ],
                 row![
@@ -439,9 +468,21 @@ impl App {
                         .width(38),
                     column![
                         text(&p.name).size(14).font(DISPLAY),
-                        text(hustlx_oss::profile::encode(&p.positions))
-                            .size(10)
-                            .color(c.muted),
+                        text(format!(
+                            "{}{}",
+                            hustlx_oss::profile::encode(&p.positions),
+                            if self
+                                .active()
+                                .and_then(|m| m.starting_lineup(side))
+                                .is_some_and(|ids| ids.contains(&p.id))
+                            {
+                                "  / STARTER"
+                            } else {
+                                ""
+                            }
+                        ))
+                        .size(10)
+                        .color(c.muted),
                         text(format!(
                             "{} AST  /  {} REB",
                             stats.assists,
@@ -488,6 +529,36 @@ impl App {
         card(
             column![
                 heading,
+                row![
+                    button(text("Starters").size(11))
+                        .on_press_maybe((!self.pending()).then_some(Message::OpenLineup(
+                            side,
+                            hustlx_oss::lineup::LineupKind::Starters
+                        )))
+                        .style(brand::secondary),
+                    button(text("Subs X").size(11))
+                        .on_press_maybe((!self.pending()).then_some(Message::OpenLineup(
+                            side,
+                            hustlx_oss::lineup::LineupKind::Substitution
+                        )))
+                        .style(brand::secondary),
+                ]
+                .spacing(8),
+                text(format!(
+                    "{} on court / starters {}",
+                    self.game().court_ids(side).len(),
+                    if self
+                        .active()
+                        .and_then(|m| m.starting_lineup(side))
+                        .is_some()
+                    {
+                        "saved"
+                    } else {
+                        "not set"
+                    }
+                ))
+                .size(10)
+                .color(c.muted),
                 scrollable(players.width(Fill))
                     .width(Fill)
                     .spacing(8)

@@ -8,6 +8,7 @@ pub enum Action {
     Undo,
     Clear,
     Help,
+    Substitutions,
 }
 pub struct Input<'a> {
     pub key: &'a str,
@@ -106,6 +107,7 @@ impl Hotkeys {
             "t" => Stat::Turnover,
             "v" => Stat::Steal,
             "b" => Stat::Block,
+            "x" => return Some(Action::Substitutions),
             "p" => return Some(Action::Clock(ClockCommand::NextPeriod)),
             _ => return None,
         };

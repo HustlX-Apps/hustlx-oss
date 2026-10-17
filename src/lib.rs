@@ -2,6 +2,7 @@
 
 pub mod clock;
 pub mod hotkeys;
+pub mod lineup;
 pub mod profile;
 pub mod session;
 pub mod storage;
@@ -184,6 +185,15 @@ impl Game {
             Side::Home => 0,
             Side::Away => 1,
         }]
+    }
+
+    pub fn court_ids(&self, side: Side) -> Vec<i64> {
+        self.team(side)
+            .players
+            .iter()
+            .filter(|p| p.on_court)
+            .map(|p| p.id)
+            .collect()
     }
 
     pub fn player(&self, side: Side, id: i64) -> Option<&Player> {

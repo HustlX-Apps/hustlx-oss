@@ -4,7 +4,7 @@
 
 Rust and Iced render the interface. SQLite stores reusable teams/players, memberships, named and dated matches, roster snapshots, and durable stat/undo events. Startup opens Matches with an empty library on first use. No sample records are inserted.
 
-Game and shot clocks use monotonic countdowns, transactional commands and paused restart recovery. Player profiles include optional jerseys and positions; supported v2 shortcuts work on Game Day. Substitutions, timeouts, completion, full box scores, exports, and installers remain planned. The first five roster members are initially on court, with no lineup editor yet. This is not ready to keep a real game's complete official record.
+Game and shot clocks use monotonic countdowns, transactional commands and paused restart recovery. Player profiles include optional jerseys and positions; supported v2 shortcuts work on Game Day. Starting lineups, confirmed substitutions and saved lineup history are available. Timeouts, completion, full box scores, exports, and installers remain planned. New matches start with empty courts and require explicit starter selection to put players on court; this is advisory and does not block other game-day actions. This is not ready to keep a real game's complete official record.
 
 ## Prerequisites
 
@@ -68,15 +68,20 @@ Integration tests use temporary databases for unknown identities, invalid dates,
 ## Structure
 
 - `src/lib.rs`: renderer-independent match/stat projections. Synthetic defaults support tests only.
-- `src/schema.sql`, `src/storage.rs`: schema version 2 with `src/migration_v2.sql`, catalog operations, roster snapshots, transactional event commands.
+- `src/schema.sql`, `src/storage.rs`: schema version 3 with `src/migration_v2.sql` and `src/migration_v3.sql`, catalog operations, roster snapshots, transactional event commands.
 - `src/session.rs`: commit-before-display state and pending retries.
 - `src/brand.rs`: embedded wordmarks, Inter/Exo font roles, and light/dark palettes. See [branding](branding.md).
-- `src/main.rs`, `src/ui.rs`, `src/library_ui.rs`, `src/clock_ui.rs`: native entry point, Game Day console, and library forms.
+- `src/main.rs`, `src/ui.rs`, `src/library_ui.rs`, `src/clock_ui.rs`, `src/lineup_ui.rs`: native entry point, Game Day console, and library forms.
+- `src/lineup.rs`, `src/lineup_storage.rs`: side-scoped lineup drafts, current court and starter/substitution receipts.
 - `src/clock.rs`, `src/profile.rs`, `src/hotkeys.rs`: renderer-independent clocks, player details, and shortcut routing.
 - `src/native_quit.rs`: macOS AppKit Quit delegates to the durable close path; Windows uses Iced close requests. Recheck the native Quit journey after Iced/winit upgrades.
-- `tests/preview.rs`, `tests/storage.rs`, `tests/clocks.rs`, `tests/desktop.rs`, `tests/hotkeys.rs`: domain, persistence, recovery and shortcut tests.
+- `tests/preview.rs`, `tests/storage.rs`, `tests/clocks.rs`, `tests/desktop.rs`, `tests/hotkeys.rs`, `tests/lineups.rs`: domain, persistence, recovery and shortcut tests.
 - `docs/references/`: original web screenshots, separate from native evidence.
 
 ## Clock smoke check
 
 Use [clocks and shortcuts](clocks-hotkeys.md). Check Space, 24/14 resets, independent shot pause, time corrections, both expiry paths, period advance, jersey/side selection and undo. Close while running with both the window close button and macOS Command-Q, reopen paused, and confirm no closed interval was deducted. Inject a failing clock write only into an isolated test database; confirm Quit stays open and Retry saves once before closing. Sleep/discontinuity and abrupt recovery have deterministic session tests; physical sleep/power-loss tests remain a release gate.
+
+## Lineup smoke check
+
+Create an isolated match with seven players per side. Save five starters per side, record attributed stats, stage two swaps, cancel and verify the court is unchanged. Confirm the swaps and restart the complete app; court order, starter markers, bench membership, scores and lineup history must persist. Confirm X chooses the hinted side and stat shortcuts do not leak into the editor/history. Inject an abort trigger on lineup receipts in the isolated database only; Confirm must leave a retryable pending command, preserve the committed court/clock, and block Quit. Remove the trigger, retry, and confirm exactly one receipt. Inspect both themes at the minimum window size. See [native evidence](evidence/native-lineups/README.md).

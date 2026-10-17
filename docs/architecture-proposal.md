@@ -1,6 +1,6 @@
 # Architecture and proposals
 
-Status: Rust-rendered UI throughout was selected by the user on October 16, 2026. Iced is the initial toolkit. SQLite persistence, the local library, native clocks and supported shortcuts are implemented. Complete official game operation, export/backup tooling, and syncing remain planned.
+Status: Rust-rendered UI throughout was selected by the user on October 16, 2026. Iced is the initial toolkit. SQLite persistence, the local library, native clocks, supported shortcuts, lineups and substitutions are implemented. Complete official game operation, export/backup tooling, and syncing remain planned.
 
 ## UI decision
 
@@ -16,7 +16,7 @@ References checked October 16, 2026: [Iced 0.14 documentation](https://docs.rs/i
 ## Implemented boundaries
 
 - `src/lib.rs` owns stable player identity, side-scoped event-derived player/team statistics, selection, and undo projection. It has no renderer dependency.
-- `src/storage.rs`, `src/schema.sql` and `src/migration_v2.sql` own SQLite schema version 2, catalog operations, match creation, snapshots, and record/undo transactions. Form values use bound parameters; the UI does not issue SQL.
+- `src/storage.rs`, `src/schema.sql`, `src/migration_v2.sql` and `src/migration_v3.sql` own SQLite schema version 3, catalog operations, match creation, snapshots, and record/undo transactions. Form values use bound parameters; the UI does not issue SQL.
 - `src/session.rs` owns the active committed match and one pending command. A write failure leaves visible stats and selection unchanged. Retry uses the same UUID.
 - `src/ui.rs` and `src/library_ui.rs` own native Iced navigation, forms, and the v2 console. SQLite calls run synchronously with a bounded 250 ms busy timeout. Larger libraries may require background loading later.
 
@@ -24,7 +24,7 @@ SQLite is the durable source of truth. Read transactions load metadata, rosters,
 
 Catalog players and teams have local integer IDs; names and jersey labels are not keys. Match creation copies active team names and memberships into per-side snapshots. Renaming, archiving, or changing catalog memberships cannot rewrite saved match attribution. A player may belong to multiple teams, including both sides; the match side and player ID identify the actor together. Empty rosters are valid.
 
-The database uses foreign keys, WAL, and synchronous FULL. First open creates schema 1 and migrates to schema 2 transactionally. Newer, foreign, and corrupt databases fail visibly without a reset. The additive schema 1 to 2 migration preserves existing events and snapshots. No downgrade path exists; preserve a pre-upgrade backup. See [storage](storage.md) for paths, schema, and preservation boundaries.
+The database uses foreign keys, WAL, and synchronous FULL. First open creates schema 1 and migrates through schema 3 transactionally. Newer, foreign, and corrupt databases fail visibly without a reset. The additive migrations preserve existing events, snapshots, court flags and clock truth. Schema 3 adds lineup receipts/history without inferring unknown starters. No downgrade path exists; preserve a pre-upgrade backup. See [storage](storage.md) for paths, schema, and preservation boundaries.
 
 ## Future boundaries
 
@@ -42,3 +42,7 @@ Failed stat/undo saves remain visibly pending with an explicit retry. Pending co
 ## Verification boundaries
 
 Rust tests cover scoring, durable undo, duplicate commands, stale revisions, atomic persistence, and failed-save display behavior. Clock tests cover first expiry, independent shot pause, exact checkpoints, close/reopen, uncertain intervals, stale/duplicate commands, and atomic stat/clock failure. UI tests should cover Team A versus Team B setup, player attribution, local results, and export errors. Windows and macOS builds and native smoke tests are separate release gates. Verify launch, game operation, close/reopen, and export with the network disconnected.
+
+## Lineups and substitutions
+
+`src/lineup.rs` owns ordered court selections, structural validation and local editor drafts. `src/lineup_storage.rs` writes the current court projection and an append-only before/after receipt with clock context in one transaction and one shared revision. Lineup UUIDs cannot collide with stat or clock commands. `SavedMatch::starting_lineup` reads the latest explicit starter selection separately from current on-court flags; substitutions never rewrite it. Side plus player ID remains identity. `src/lineup_ui.rs` provides the v2-style confirmation board and saved history. Count deviations are advisory; no rule/claim gates are added. See [operator guide](lineups-substitutions.md).

@@ -31,6 +31,7 @@ Shortcuts use the supported mappings from web v2. They work on Game Day, outside
 | Space | Start/pause both clocks |
 | `[` / `]` | Reset shot to 24 / 14 |
 | P | Next period, clocks paused |
+| X | Open substitution board for typed/clicked player or explicit comma/period side |
 | Q / W / E | Made free throw / two / three |
 | A / S / D | Missed free throw / two / three |
 | R / Y | Defensive / offensive rebound |
@@ -43,4 +44,4 @@ Shortcuts use the supported mappings from web v2. They work on Game Day, outside
 
 Click a player, then a stat key, or type their jersey followed by a stat key. Two digits are supported, including `00`. Comma chooses home; period chooses away. For example, comma, 4, W records a home #4 made two. Period, 3, E records an away #3 made three. The jersey buffer clears after a successful stat. Ambiguous jerseys require an explicit side or clicked player; the application never guesses. Clicking a player clears the typed buffer.
 
-Substitution and timeout shortcuts X/O remain unbound because those workflows are not implemented. There is no active-match roster editor, period-duration configuration, official closeout, minutes/plus-minus calculation, export or sync in this slice.
+X opens the native confirmation board rather than the web two-jersey Enter sequence; see [lineups and substitutions](lineups-substitutions.md). Timeout O remains unbound. There is no active-match roster identity editor, period-duration configuration, official closeout, minutes/plus-minus calculation, export or sync in this slice.

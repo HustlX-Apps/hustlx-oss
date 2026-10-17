@@ -2,17 +2,19 @@
 use crate::{
     Side, Stat,
     clock::{ClockCommand, ClockState},
+    lineup::LineupKind,
     storage::{Error, MatchDraft, Result, SavedMatch, Store},
 };
 use std::time::{Duration, Instant, SystemTime};
 use uuid::Uuid;
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum Action {
     Record(Side, i64, Stat),
     Undo,
     Clock,
+    Lineup(Side, LineupKind, Vec<i64>),
 }
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Pending {
     id: Uuid,
     match_id: i64,
@@ -64,7 +66,7 @@ impl Session {
         let Some(active) = &self.active else {
             return ClockState::default();
         };
-        let now = self.pending.map_or(now, |p| p.freeze_at);
+        let now = self.pending.as_ref().map_or(now, |p| p.freeze_at);
         active
             .clock
             .elapsed(now.saturating_duration_since(self.anchor))
@@ -125,6 +127,21 @@ impl Session {
     pub fn undo(&mut self) -> Result<()> {
         let now = Instant::now();
         self.begin(Action::Undo, self.clock_at(now), now)
+    }
+    pub fn save_lineup_at(
+        &mut self,
+        side: Side,
+        kind: LineupKind,
+        court: Vec<i64>,
+        now: Instant,
+    ) -> Result<()> {
+        let game = &self
+            .active
+            .as_ref()
+            .ok_or_else(|| Error::Validation("Open a match first.".into()))?
+            .game;
+        crate::lineup::validate(game, side, &court)?;
+        self.begin(Action::Lineup(side, kind, court), self.clock_at(now), now)
     }
     pub fn command_at(&mut self, command: ClockCommand, now: Instant) -> Result<()> {
         let clock = self.clock_at(now).command(command)?;
@@ -211,21 +228,25 @@ impl Session {
     fn commit(&mut self, now: Instant) -> Result<()> {
         let p = self
             .pending
+            .clone()
             .ok_or_else(|| Error::Validation("There is no pending save.".into()))?;
-        let saved = match p.action {
+        let saved = match &p.action {
             Action::Record(side, player, stat) => self.store.record_with_clock(
                 p.match_id,
                 p.revision,
                 p.id,
-                side,
-                player,
-                stat,
+                *side,
+                *player,
+                *stat,
                 Some(p.clock),
             )?,
             Action::Undo => {
                 self.store
                     .undo_with_clock(p.match_id, p.revision, p.id, Some(p.clock))?
             }
+            Action::Lineup(side, kind, court) => self
+                .store
+                .save_lineup(p.match_id, p.revision, p.id, *side, *kind, court, p.clock)?,
             Action::Clock => self
                 .store
                 .save_clock(p.match_id, p.revision, p.id, p.clock)?,

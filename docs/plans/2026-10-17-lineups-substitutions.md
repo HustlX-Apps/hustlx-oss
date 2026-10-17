@@ -18,8 +18,8 @@ Repo set: hustlx-oss only; Nuxt v2 substitution board/hotkey source is read-only
 
 ## Checklist
 
-- [ ] Write failing persistence/draft/session tests for scope, snapshots, migration, restart, idempotency, concurrency and atomic failure.
-- [ ] Implement lineup model/schema 3/repository/session commands; pass targeted tests.
-- [ ] Add native editor, live starter markers, saved history and guarded X shortcut; build and render.
-- [ ] Verify native multi-player swaps/restart/cancel/save failure, both themes/minimum size; document evidence and limits.
-- [ ] Run required checks, push branch/update PR to develop, assess Windows/macOS CI.
+- [x] Write failing persistence/draft/session tests for scope, snapshots, migration, restart, idempotency, concurrency and atomic failure.
+- [x] Implement lineup model/schema 3/repository/session commands; pass targeted tests.
+- [x] Add native editor, live starter markers, saved history and guarded X shortcut; build and render.
+- [x] Verify native multi-player swaps/restart/cancel/save failure, both themes/minimum size; document evidence and limits.
+- [x] Run required checks, push branch/update PR to develop, assess Windows/macOS CI.
