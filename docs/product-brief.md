@@ -4,7 +4,7 @@ Recorded October 16, 2026. This captures the initial product request, not shippe
 
 ## Confirmed direction
 
-HustlX OSS is a Rust-based desktop basketball Game Day application for Windows and macOS. Follow the existing web Game Day v2 UI as closely as practical. Document decisions, behavior, setup, and verification as the project develops.
+HustlX OSS uses Rust throughout its interface and domain logic. The user confirmed Rust-rendered UI on October 16, 2026; Iced is the initial rendering toolkit. It is a desktop basketball Game Day application for Windows and macOS. Follow the existing web Game Day v2 UI as closely as practical. Document decisions, behavior, setup, and verification as the project develops.
 
 The local product contains teams, players, and matches. A league, season, bracket, standings system, online account, or hosted backend is not required to run a game.
 
@@ -35,7 +35,6 @@ Other sports, league management, payments, livestreaming, and simultaneous multi
 
 ## Open decisions
 
-- Tauri with a Vue interface and Rust core, or a UI written in Rust throughout.
 - Open-source license. MIT is a candidate, not an adopted license.
 - First export formats. CSV for analysis and JSON for portable backups are proposed; printable/PDF output can follow.
 - Minimum OS versions, supported CPU architectures, installer signing, and release distribution.

@@ -1,0 +1,31 @@
+[package]
+name = "hustlx-oss"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Offline-first basketball Game Day desktop application"
+repository = "https://github.com/HustlX-Apps/hustlx-oss"
+
+[features]
+default = ["desktop"]
+desktop = ["dep:iced"]
+
+[dependencies]
+chrono = "0.4"
+directories = "6"
+iced = { version = "0.14", optional = true, default-features = false, features = ["wgpu", "tiny-skia", "crisp", "thread-pool", "svg", "tokio"] }
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+
+[[bin]]
+name = "hustlx-oss"
+path = "src/main.rs"
+required-features = ["desktop"]
+
+[dev-dependencies]
+tempfile = "3"
+
+[workspace]
+members = ["xtask"]
+default-members = ["."]
+resolver = "3"

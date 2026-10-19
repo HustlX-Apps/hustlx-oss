@@ -7,29 +7,43 @@ Each slice should produce a reviewable change, matching documentation, and evide
 - [x] Create an independent local repository named hustlx-oss.
 - [x] Record the initial scope and proposed architecture.
 - [x] Capture dark and light references from the real web v2 components with sample data.
-- [ ] Approve the desktop stack and open-source license.
-- [ ] Scaffold the application and establish formatting, tests, and Windows/macOS build jobs.
+- [x] Select Rust-rendered UI throughout. Use Iced for the first native build.
+- [ ] Select the open-source license.
+- [x] Scaffold the application and establish formatting, tests, and Windows/macOS build jobs. CI results must be checked separately from configuration.
+
+## Native preview
+
+- [x] Render the scoreboard, roster panels, stat pad, and play-by-play natively in Rust.
+- [x] Exercise player selection, event-derived statistics, undo, and light/dark themes.
+- [x] Capture the actual native window and record [local verification](evidence/native-preview/README.md).
 
 ## Local library
 
-- [ ] Persist teams, players, and roster memberships.
-- [ ] Create a named, dated match at a venue by choosing Team A and Team B.
-- [ ] Save match roster snapshots and reopen matches from the local library.
+- [x] Persist teams, players, and roster memberships, including rename/archive/restore.
+- [x] Create a named, dated match with an optional venue by choosing Team A and Team B.
+- [x] Save match roster snapshots and reopen matches from the local library. See [evidence](evidence/sqlite-library/README.md).
 
 ## Basketball Game Day
 
-- [ ] Reproduce the v2 scoreboard and three-column console in both themes.
-- [ ] Implement scoring, player attribution, shots, rebounds, assists, steals, blocks, turnovers, and fouls.
-- [ ] Implement lineups, substitutions, timeouts, and configurable periods.
-- [ ] Implement durable undo/corrections and game/shot clock recovery.
-- [ ] Prove that closing or interrupting the app does not lose committed game actions.
+- [x] Reproduce the v2 scoreboard and three-column console in both themes.
+- [x] Persist scoring, player attribution, shots, rebounds, assists, steals, blocks, turnovers, and fouls.
+- [x] Implement explicit starting lineups, confirmed substitutions and saved lineup history.
+- [ ] Implement timeouts and configurable periods.
+- [x] Implement durable undo with an append-only correction trail.
+- [x] Implement game/shot clocks, explicit time correction, and paused checkpoint recovery.
+- [x] Add default player jerseys/positions and supported v2 stat/clock hotkeys.
+- [ ] Implement broader stat correction editing.
+- [x] Prove committed stats survive close/reopen and failed writes roll back.
+- [x] Test running-checkpoint recovery and sleep/time discontinuity policies deterministically.
+- [ ] Exercise physical sleep, Force Quit and power interruption on both operating systems.
 
 ## Results and release
 
 - [ ] View saved box scores and play-by-play locally.
 - [ ] Export statistics and portable backups and test restore behavior.
 - [ ] Verify the complete journey without network access on Windows and macOS.
-- [ ] Document supported OS/CPU targets, installers, signing, and upgrade behavior.
+- [x] Add version preparation and native local ZIP/checksum commands, without publishing.
+- [ ] Verify optimized real-app packages and document supported OS/CPU targets, installers, signing, and upgrade behavior.
 - [ ] Publish the first licensed software release with verification evidence.
 
 ## Later
