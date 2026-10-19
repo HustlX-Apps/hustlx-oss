@@ -291,11 +291,13 @@ fn archive(p: &Plan, payload: &Path) -> Result<()> {
     }
     Ok(())
 }
-fn write_checksum(p: &Plan) -> Result<()> {
-    let result=match p.os {
-  Os::Mac=>output(Command::new("/usr/bin/shasum").arg("-a").arg("256").arg(&p.archive))?,
-  Os::Windows=>output(powershell("$ErrorActionPreference='Stop'; (Get-FileHash -Algorithm SHA256 -LiteralPath $env:HUSTLX_PACKAGE_ARCHIVE).Hash").env("HUSTLX_PACKAGE_ARCHIVE",&p.archive))?,
- };
+fn checksum(os: Os, path: &Path) -> Result<String> {
+    let result = match os {
+        Os::Mac => output(Command::new("/usr/bin/shasum").args(["-a", "256"]).arg(path))?,
+        // A Windows PowerShell child can inherit a module path from pwsh that
+        // cannot resolve Get-FileHash. .NET hashing does not need that cmdlet.
+        Os::Windows => output(powershell("$ErrorActionPreference='Stop'; $sha=[System.Security.Cryptography.SHA256]::Create(); $stream=[System.IO.File]::OpenRead($env:HUSTLX_PACKAGE_ARCHIVE); try { [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-','') } finally { $stream.Dispose(); $sha.Dispose() }").env("HUSTLX_PACKAGE_ARCHIVE", path))?,
+    };
     let text = String::from_utf8_lossy(&result.stdout);
     let hash = text
         .split_whitespace()
@@ -304,11 +306,14 @@ fn write_checksum(p: &Plan) -> Result<()> {
     if hash.len() != 64 || !hash.bytes().all(|c| c.is_ascii_hexdigit()) {
         return Err("Invalid SHA-256 output".into());
     }
+    Ok(hash.to_ascii_lowercase())
+}
+fn write_checksum(p: &Plan) -> Result<()> {
     write(
         &p.output.join("SHA256SUMS"),
         format!(
             "{}  {}\n",
-            hash.to_ascii_lowercase(),
+            checksum(p.os, &p.archive)?,
             p.archive
                 .file_name()
                 .ok_or("No archive name")?

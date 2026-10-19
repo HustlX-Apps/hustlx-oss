@@ -82,4 +82,4 @@ cargo test --locked --workspace --all-targets
 cargo clippy --locked --workspace --all-targets -- -D warnings
 ```
 
-Tests build archives from temporary synthetic fixtures and verify extraction and checksum generation. macOS additionally compiles a tiny fixture app and validates its plist and ad-hoc signature. CI dry-runs both OS wrappers. It does not build/upload actual release packages. [Implementation evidence](evidence/release-tooling/README.md) records the tested scope.
+Tests build archives from temporary synthetic fixtures and verify extraction and checksum generation. macOS additionally compiles a tiny fixture app and validates its plist and ad-hoc signature. Windows checksums use .NET SHA256 directly inside PowerShell so inherited module paths do not require Get-FileHash. CI dry-runs both OS wrappers. It does not build/upload actual release packages. [Implementation evidence](evidence/release-tooling/README.md) records the tested scope.

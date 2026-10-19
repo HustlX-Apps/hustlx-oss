@@ -206,3 +206,14 @@ fn synthetic_macos_app_has_valid_plist_and_ad_hoc_signature() {
     .unwrap();
     sign(&p, &payload).unwrap();
 }
+
+#[test]
+fn native_checksum_matches_a_known_sha256_digest() {
+    let t = Temp::new();
+    let path = t.0.join("checksum's fixture with spaces.txt");
+    fs::write(&path, "abc").unwrap();
+    assert_eq!(
+        checksum(native_os().unwrap(), &path).unwrap(),
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    );
+}

@@ -4,7 +4,7 @@ Prepared October 19, 2026. No application version bump, release tag, GitHub Rele
 
 - Created remote/local main from develop commit `4ee157c5d88d011866706d45e5b7ab5af7c6a1e5`. The existing implementation PR #1 continues to target develop; no protected branch was merged or changed with implementation commits.
 - New tests failed against the missing tool before implementation.
-- `cargo test --locked --workspace --all-targets`: 51 passed on macOS (44 app tests and 7 tooling tests). Windows runs 50 because the signing fixture is macOS-only.
+- `cargo test --locked --workspace --all-targets`: 52 passed on macOS (44 app tests and 8 tooling tests). Windows runs 51 because the signing fixture is macOS-only.
 - `cargo clippy --locked --workspace --all-targets -- -D warnings`: passed.
 - `cargo build --locked`: passed. This is the existing debug app build, not a release artifact.
 - `cargo fmt --all -- --check`, `bash -n scripts/release.sh`, whitespace and local doc links: checked before handoff.
@@ -15,3 +15,5 @@ Prepared October 19, 2026. No application version bump, release tag, GitHub Rele
 The shared umbrella verifier has no Rust lane. Cargo/CI own this evidence. No hosted API, payment, subscription, game data or runtime match behavior changed. No root docs were edited.
 
 Actual optimized app packaging, ARM Windows and Intel macOS target builds, hardware launch tests, installers, icons, Developer ID/notarization, Windows code signing and minimum OS certification remain release checks. The project license remains undecided. The existing upstream block 0.1.6 future-compatibility warning remains.
+
+The first Windows CI found that the child Windows PowerShell process could not resolve Get-FileHash after creating its ZIP. Checksum generation now uses .NET SHA256 directly, avoiding cmdlet/module auto-loading. A known SHA-256 digest test covers this path with spaces and an apostrophe in the filename, in addition to ZIP extraction/checksum tests.
