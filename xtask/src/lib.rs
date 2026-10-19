@@ -163,6 +163,7 @@ fn plan(root: &Path, value: &str, target: &str, os: Os) -> Result<Plan> {
         ));
     }
     for file in [
+        "LICENSE",
         "THIRD_PARTY_NOTICES.md",
         "assets/fonts/EXO-OFL.txt",
         "assets/fonts/INTER-OFL.txt",
@@ -234,6 +235,7 @@ fn stage(p: &Plan, binary: &Path) -> Result<PathBuf> {
         payload.join("hustlx-oss.exe")
     };
     copy(binary, &executable)?;
+    copy(&p.root.join("LICENSE"), &resources.join("LICENSE"))?;
     copy(
         &p.root.join("THIRD_PARTY_NOTICES.md"),
         &resources.join("THIRD_PARTY_NOTICES.md"),
@@ -253,7 +255,7 @@ fn stage(p: &Plan, binary: &Path) -> Result<PathBuf> {
     )?;
     write(
         &resources.join("README.txt"),
-        "HustlX OSS portable development build\n\nmacOS: move HustlX OSS.app to Applications. This bundle is ad-hoc signed, not Developer ID signed or notarized.\nWindows: extract the complete folder, then open hustlx-oss.exe. It is unsigned.\n\nYour local SQLite library is stored in your user data directory, separately from this package. Preserve a closed-library backup before upgrading. No runtime Rust, Node, database server or network connection is needed.\nThis project has no selected open-source license yet. This archive does not grant reuse rights beyond the included third-party notices.\n",
+        "HustlX OSS portable development build\n\nmacOS: move HustlX OSS.app to Applications. This bundle is ad-hoc signed, not Developer ID signed or notarized.\nWindows: extract the complete folder, then open hustlx-oss.exe. It is unsigned.\n\nYour local SQLite library is stored in your user data directory, separately from this package. Preserve a closed-library backup before upgrading. No runtime Rust, Node, database server or network connection is needed.\nProject code and documentation use the MIT License; see LICENSE. Fonts and dependencies retain their own licenses. HustlX logos and wordmarks are excluded from MIT; no trademark rights are granted. See THIRD_PARTY_NOTICES.md.\n",
     )?;
     Ok(payload)
 }

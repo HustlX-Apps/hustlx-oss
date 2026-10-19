@@ -8,7 +8,7 @@ Each slice should produce a reviewable change, matching documentation, and evide
 - [x] Record the initial scope and proposed architecture.
 - [x] Capture dark and light references from the real web v2 components with sample data.
 - [x] Select Rust-rendered UI throughout. Use Iced for the first native build.
-- [ ] Select the open-source license.
+- [x] Select the open-source license: MIT for project code and documentation; see [LICENSE](../LICENSE) and [asset exceptions](../THIRD_PARTY_NOTICES.md).
 - [x] Scaffold the application and establish formatting, tests, and Windows/macOS build jobs. CI results must be checked separately from configuration.
 
 ## Native preview

@@ -32,6 +32,7 @@ fn fixture() -> Temp {
     fs::write(t.0.join("Cargo.lock"),"version = 4\n\n[[package]]\nname = \"other\"\nversion = \"3.0.0\"\n\n[[package]]\nname = \"hustlx-oss\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"xtask\"\nversion = \"0.1.0\"\n").unwrap();
     fs::create_dir_all(t.0.join("assets/fonts")).unwrap();
     for file in [
+        "LICENSE",
         "THIRD_PARTY_NOTICES.md",
         "assets/fonts/EXO-OFL.txt",
         "assets/fonts/INTER-OFL.txt",
@@ -104,6 +105,16 @@ fn plans_reject_version_mismatch_cross_os_and_unsupported_targets() {
     assert!(!t.0.join("dist").exists());
 }
 #[test]
+fn plans_require_project_license_before_packaging() {
+    let t = fixture();
+    fs::remove_file(t.0.join("LICENSE")).unwrap();
+    let error = plan(&t.0, "0.1.0", "aarch64-apple-darwin", Os::Mac)
+        .err()
+        .expect("packaging must require the project license");
+    assert_eq!(error, "Required notice is missing: LICENSE");
+    assert!(!t.0.join("dist").exists());
+}
+#[test]
 fn package_tree_contains_only_binary_metadata_and_required_notices() {
     let t = fixture();
     fs::write(t.0.join("synthetic-binary"), "fixture, not executable").unwrap();
@@ -119,6 +130,13 @@ fn package_tree_contains_only_binary_metadata_and_required_notices() {
         } else {
             payload.clone()
         };
+        assert_eq!(
+            fs::read(resources.join("LICENSE")).unwrap(),
+            fs::read(t.0.join("LICENSE")).unwrap()
+        );
+        let readme = fs::read_to_string(resources.join("README.txt")).unwrap();
+        assert!(readme.contains("MIT License"));
+        assert!(!readme.contains("no selected open-source license"));
         assert!(resources.join("THIRD_PARTY_NOTICES.md").exists());
         assert!(resources.join("licenses/EXO-OFL.txt").exists());
         assert!(resources.join("VERSION.txt").exists());

@@ -33,9 +33,12 @@ Optional syncing to an eligible paid HustlX league comes later. Entitlement vali
 
 Other sports, league management, payments, livestreaming, and simultaneous multi-device operation are outside the first release.
 
+## License decision
+
+MIT was selected on October 19, 2026 for project code and documentation, including the packaging tool. This permits commercial and closed-source reuse with the copyright and license notice retained. Bundled fonts and dependencies retain their own terms; HustlX logos and wordmarks are excluded. See [LICENSE](../LICENSE) and [third-party notices](../THIRD_PARTY_NOTICES.md).
+
 ## Open decisions
 
-- Open-source license. MIT is a candidate, not an adopted license.
 - First export formats. CSV for analysis and JSON for portable backups are proposed; printable/PDF output can follow.
 - Minimum OS versions, supported CPU architectures, installer signing, and release distribution.
 - First-release basketball configuration defaults and correction behavior, grounded in the existing operator workflows before implementation.

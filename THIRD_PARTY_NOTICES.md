@@ -16,10 +16,12 @@ Copyright 2017 The Exo Project Authors (https://github.com/NDISCOVER/Exo-1.0).
 
 Licensed under SIL Open Font License 1.1; see [EXO-OFL.txt](assets/fonts/EXO-OFL.txt), retained from the native HustlX font distribution.
 
-All fonts are embedded in the executable for offline operation. Font licenses apply independently of the pending project code license. The earlier Fira Sans preview fonts are no longer bundled.
+All fonts are embedded in the executable for offline operation. Font licenses apply independently of the project's [MIT License](LICENSE). The earlier Fira Sans preview fonts are no longer bundled.
 
 ## HustlX wordmarks
 
 `assets/brand/hustlx-wordmark-white.svg` and `hustlx-wordmark-navy.svg` are the existing official HustlX wordmarks, copied without modification from `hustlx-nuxt4/public/` on October 16, 2026, at the project owner's request. Their vector letterforms and gold lightning detail are preserved. They are HustlX brand assets, separate from the OFL font files; the font licenses do not license the wordmarks.
 
-Cargo dependencies retain their respective licenses. `Cargo.lock` records resolved versions; dependency notices need to be collected for packaged distribution.
+HustlX logos and wordmarks, including the files in `assets/brand/`, are excluded from the project's MIT license and remain reserved to their rights holders. The MIT license grants no rights to HustlX names or trademarks and does not imply endorsement. Obtain separate permission to reuse the artwork or replace it when distributing a fork.
+
+Cargo dependencies retain their respective licenses. `Cargo.lock` records resolved versions; dependency notices need to be collected for packaged distribution. Project code and documentation, including the `xtask` packaging tool, use the [MIT License](LICENSE).

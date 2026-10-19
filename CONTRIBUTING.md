@@ -1,6 +1,6 @@
 # Contributing
 
-This project has a native Rust application in development. Maintainers need to select a license before accepting outside code contributions.
+This project has a native Rust application in development. Project code and documentation use the [MIT License](LICENSE). By submitting a contribution, you agree to license it under MIT and confirm that you have the right to do so. Preserve existing copyright and license notices. Bundled fonts, dependencies, and HustlX branding have separate terms in [third-party notices](THIRD_PARTY_NOTICES.md).
 
 Start with the [product brief](docs/product-brief.md), [architecture proposal](docs/architecture-proposal.md), and [roadmap](docs/roadmap.md). Keep proposals and planned behavior clearly distinguished from implemented and verified behavior.
 

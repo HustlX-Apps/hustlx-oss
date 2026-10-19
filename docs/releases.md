@@ -1,6 +1,6 @@
 # Version preparation and local desktop packages
 
-These commands prepare source versions and build local packages. They never create tags, push branches, upload artifacts, publish GitHub Releases or publish to crates.io. No release has been published. The app remains a development build; license selection and release-readiness checks are still pending.
+These commands prepare source versions and build local packages. They never create tags, push branches, upload artifacts, publish GitHub Releases or publish to crates.io. No release has been published. The app remains a development build; project code and documentation use the [MIT License](../LICENSE), and release-readiness checks are still pending.
 
 ## Branches
 
@@ -68,11 +68,11 @@ Each invocation creates a fresh `dist/hustlx-oss-VERSION-TARGET/` containing:
 - Windows: a `HustlX OSS` portable directory with `hustlx-oss.exe`, and its ZIP.
 - `SHA256SUMS` for the ZIP.
 
-Packages include version/target metadata, third-party notices and font licenses. They do not copy your local database, exports, credentials or arbitrary repository files. Existing output directories are never overwritten; move a previous or failed staging directory before retrying.
+Packages include version/target metadata, the project MIT LICENSE, third-party notices and font licenses. The project license is required during planning and copied into macOS Contents/Resources or the Windows portable directory. They do not copy your local database, exports, credentials or arbitrary repository files. Existing output directories are never overwritten; move a previous or failed staging directory before retrying.
 
 macOS bundles use `com.hustlx.oss.desktop`, numeric version components in Info.plist, Retina support and ad-hoc signing without credentials. The full SemVer appears in the archive name and VERSION.txt. These are not Developer ID signed or notarized releases. Windows executables are unsigned; version/target metadata is in VERSION.txt, not a Windows executable version resource. Installers, launcher icons, OS trust prompts, supported OS/CPU testing and official signing/notarization remain release work.
 
-Before distributing an actual build, complete the real-app launch/offline/upgrade journey on each supported OS and architecture, resolve project licensing, preserve a closed-library backup and review the exact package contents. This tooling does not make those release claims.
+Before distributing an actual build, complete the real-app launch/offline/upgrade journey on each supported OS and architecture, collect required Cargo dependency notices, preserve a closed-library backup and review the exact package contents. This tooling does not make those release claims.
 
 ## Verification
 
