@@ -3,7 +3,7 @@ name: Rust desktop
 on:
   pull_request:
   push:
-    branches: [develop]
+    branches: [develop, main]
 
 permissions:
   contents: read
@@ -22,8 +22,18 @@ jobs:
       - name: Format
         run: cargo +stable fmt --all -- --check
       - name: Test
-        run: cargo +stable test --locked --all-targets
+        run: cargo +stable test --locked --workspace --all-targets
       - name: Clippy
-        run: cargo +stable clippy --locked --all-targets -- -D warnings
+        run: cargo +stable clippy --locked --workspace --all-targets -- -D warnings
       - name: Build native application
         run: cargo +stable build --locked
+      - name: Dry-run macOS packaging wrapper
+        if: runner.os == 'macOS'
+        run: scripts/release.sh --version "$(cargo xtask version)" --dry-run
+      - name: Dry-run Windows packaging wrapper
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $releaseVersion = cargo xtask version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./scripts/release.ps1 -Version $releaseVersion -DryRun

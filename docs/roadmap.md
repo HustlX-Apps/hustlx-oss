@@ -42,7 +42,8 @@ Each slice should produce a reviewable change, matching documentation, and evide
 - [ ] View saved box scores and play-by-play locally.
 - [ ] Export statistics and portable backups and test restore behavior.
 - [ ] Verify the complete journey without network access on Windows and macOS.
-- [ ] Document supported OS/CPU targets, installers, signing, and upgrade behavior.
+- [x] Add version preparation and native local ZIP/checksum commands, without publishing.
+- [ ] Verify optimized real-app packages and document supported OS/CPU targets, installers, signing, and upgrade behavior.
 - [ ] Publish the first licensed software release with verification evidence.
 
 ## Later

@@ -39,8 +39,8 @@ Do not use a real operator library for destructive tests. [Storage guidance](sto
 
 ```sh
 cargo fmt --all -- --check
-cargo test --locked --all-targets
-cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked --workspace --all-targets
+cargo clippy --locked --workspace --all-targets -- -D warnings
 cargo build --locked
 ```
 
@@ -85,3 +85,7 @@ Use [clocks and shortcuts](clocks-hotkeys.md). Check Space, 24/14 resets, indepe
 ## Lineup smoke check
 
 Create an isolated match with seven players per side. Save five starters per side, record attributed stats, stage two swaps, cancel and verify the court is unchanged. Confirm the swaps and restart the complete app; court order, starter markers, bench membership, scores and lineup history must persist. Confirm X chooses the hinted side and stat shortcuts do not leak into the editor/history. Inject an abort trigger on lineup receipts in the isolated database only; Confirm must leave a retryable pending command, preserve the committed court/clock, and block Quit. Remove the trigger, retry, and confirm exactly one receipt. Inspect both themes at the minimum window size. See [native evidence](evidence/native-lineups/README.md).
+
+## Versioned packaging commands
+
+See [version preparation and local packages](releases.md). `cargo xtask version VERSION` updates the app manifest/lock version. `cargo xtask release --version VERSION --dry-run` validates the plan; omit `--dry-run` later to build a local native ZIP and checksums. These commands do not tag, push, upload or publish. The current task tested scripts and synthetic fixtures only.
