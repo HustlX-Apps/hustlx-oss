@@ -31,4 +31,4 @@ The UI uses custom-rendered widgets. Native accessibility-tree coverage and full
 
 ## Remaining release evidence
 
-Windows build/test CI and native Windows interaction checks must be assessed separately. A CI configuration alone does not prove a passing run. Installer/signing, durable storage, recovery, actual clocks, exports, and full match workflows are outside this preview. The project code license is still pending.
+Windows build/test CI and native Windows interaction checks must be assessed separately. A CI configuration alone does not prove a passing run. Installer/signing, durable storage, recovery, actual clocks, exports, and full match workflows are outside this preview. At the time of this preview, the project code license was pending; MIT was subsequently adopted on October 19, 2026 (see [LICENSE](../../../LICENSE)).

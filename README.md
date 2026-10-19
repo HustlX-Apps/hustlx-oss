@@ -2,7 +2,7 @@
 
 Offline-first basketball Game Day for Windows and macOS, built around a Rust core and the HustlX web Game Day v2 experience.
 
-**Status:** native Rust application in development. The Iced interface now supports a SQLite team/player library, roster editing, match creation and reopening, durable stat entry/undo, game/shot clocks, jersey/position profiles, supported web v2 hotkeys, starting lineups and confirmed substitutions. Exports and installers remain planned. The project license still needs a maintainer decision.
+**Status:** native Rust application in development, licensed under MIT. The Iced interface now supports a SQLite team/player library, roster editing, match creation and reopening, durable stat entry/undo, game/shot clocks, jersey/position profiles, supported web v2 hotkeys, starting lineups and confirmed substitutions. Exports and installers remain planned.
 
 The interface uses the official HustlX wordmarks, Inter body text, Exo headings and Exo Black scores, bundled for offline use. See [branding](docs/branding.md).
 
@@ -56,6 +56,8 @@ Install Rust with [rustup](https://rustup.rs/), then run `cargo run --locked`. S
 - [UI reference](docs/references/README.md): capture provenance and visual parity notes.
 - [Contributing](CONTRIBUTING.md): small changes, documentation, and verification expectations.
 
-## Open-source preparation
+## License
 
-This repository is intended to become open source. A license has not been selected yet; public visibility alone does not grant reuse rights. Choose and add the project license before accepting outside code contributions or publishing a software release. The Rust application is a new implementation; the private web application's source has not been copied. Bundled fonts retain their own license, documented in [third-party notices](THIRD_PARTY_NOTICES.md).
+Project code and documentation are licensed under the [MIT License](LICENSE). You may use, modify, redistribute, and sell the software, including in closed-source products, provided you retain the copyright and license notice. Contributions are accepted under the same license; see [contributing](CONTRIBUTING.md).
+
+Bundled fonts and dependencies retain their respective licenses. HustlX logos and wordmarks are excluded from the MIT license; no HustlX trademark rights are granted. See [asset and third-party notices](THIRD_PARTY_NOTICES.md). The Rust application is a new implementation; the private web application's source has not been copied or licensed by this repository.

@@ -14,6 +14,6 @@ Prepared October 19, 2026. No application version bump, release tag, GitHub Rele
 
 The shared umbrella verifier has no Rust lane. Cargo/CI own this evidence. No hosted API, payment, subscription, game data or runtime match behavior changed. No root docs were edited.
 
-Actual optimized app packaging, ARM Windows and Intel macOS target builds, hardware launch tests, installers, icons, Developer ID/notarization, Windows code signing and minimum OS certification remain release checks. The project license remains undecided. The existing upstream block 0.1.6 future-compatibility warning remains.
+Actual optimized app packaging, ARM Windows and Intel macOS target builds, hardware launch tests, installers, icons, Developer ID/notarization, Windows code signing and minimum OS certification remain release checks. At the time of this evidence, the project license was undecided; MIT was subsequently adopted on October 19, 2026 (see [LICENSE](../../../LICENSE)). The existing upstream block 0.1.6 future-compatibility warning remains.
 
 The first Windows CI found that the child Windows PowerShell process could not resolve Get-FileHash after creating its ZIP. Checksum generation now uses .NET SHA256 directly, avoiding cmdlet/module auto-loading. A known SHA-256 digest test covers this path with spaces and an apostrophe in the filename, in addition to ZIP extraction/checksum tests.

@@ -2,6 +2,7 @@
 name = "hustlx-oss"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
 publish = false
 description = "Offline-first basketball Game Day desktop application"
 repository = "https://github.com/HustlX-Apps/hustlx-oss"
