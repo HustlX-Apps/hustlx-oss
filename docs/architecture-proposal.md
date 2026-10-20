@@ -16,7 +16,7 @@ References checked October 16, 2026: [Iced 0.14 documentation](https://docs.rs/i
 ## Implemented boundaries
 
 - `src/lib.rs` owns stable player identity, side-scoped event-derived player/team statistics, selection, and undo projection. It has no renderer dependency.
-- `src/storage.rs`, `src/schema.sql`, `src/migration_v2.sql` and `src/migration_v3.sql` own SQLite schema version 3, catalog operations, match creation, snapshots, and record/undo transactions. Form values use bound parameters; the UI does not issue SQL.
+- `src/storage.rs`, `src/schema.sql` and `src/migration_v2.sql` through `src/migration_v4.sql` own SQLite schema version 4, catalog operations, match creation, snapshots, and record/undo transactions. Form values use bound parameters; the UI does not issue SQL.
 - `src/session.rs` owns the active committed match and one pending command. A write failure leaves visible stats and selection unchanged. Retry uses the same UUID.
 - `src/ui.rs` and `src/library_ui.rs` own native Iced navigation, forms, and the v2 console. SQLite calls run synchronously with a bounded 250 ms busy timeout. Larger libraries may require background loading later.
 
@@ -24,7 +24,7 @@ SQLite is the durable source of truth. Read transactions load metadata, rosters,
 
 Catalog players and teams have local integer IDs; names and jersey labels are not keys. Match creation copies active team names and memberships into per-side snapshots. Renaming, archiving, or changing catalog memberships cannot rewrite saved match attribution. A player may belong to multiple teams, including both sides; the match side and player ID identify the actor together. Empty rosters are valid.
 
-The database uses foreign keys, WAL, and synchronous FULL. First open creates schema 1 and migrates through schema 3 transactionally. Newer, foreign, and corrupt databases fail visibly without a reset. The additive migrations preserve existing events, snapshots, court flags and clock truth. Schema 3 adds lineup receipts/history without inferring unknown starters. No downgrade path exists; preserve a pre-upgrade backup. See [storage](storage.md) for paths, schema, and preservation boundaries.
+The database uses foreign keys, WAL, and synchronous FULL. First open creates schema 1 and migrates through schema 4 transactionally. Newer, foreign, and corrupt databases fail visibly without a reset. The additive migrations preserve existing events, snapshots, court flags and clock truth. Schema 3 adds lineup receipts/history without inferring unknown starters. Schema 4 adds pre-action clock context to stat events; legacy timing stays unknown. No downgrade path exists; preserve a pre-upgrade backup. See [storage](storage.md) for paths, schema, and preservation boundaries.
 
 ## Future boundaries
 
@@ -34,6 +34,8 @@ The database uses foreign keys, WAL, and synchronous FULL. First open creates sc
 ## Clock and recovery
 
 `src/clock.rs` derives elapsed milliseconds from monotonic `Instant` anchors. UI ticks redraw at 100 ms; they do not subtract fixed increments. `src/session.rs` routes clocks and stats through the same expected revision and commit lane. Stat side effects and clock snapshots commit atomically. Every command and five-second running checkpoint stores the baseline. Graceful close pauses before closing; AppKit Quit is cancelled and forwarded to this same path through `src/native_quit.rs`. That bridge adds the public optional applicationShouldTerminate delegate method, and refuses to overwrite a future toolkit handler. Failure leaves the window open for retry. Abrupt recovery reopens the last checkpoint paused. Gaps over two seconds or wall/monotonic divergence freeze at the last observed state with a notice. See [clock policy](clocks-hotkeys.md) for supported controls and limits.
+
+For stat entry, the pending command holds the pre-action clock projection. Storage appends that immutable snapshot to the event and applies stat clock effects to the current baseline in the same transaction. `Play::clock` is optional because legacy and clock-free synthetic events have no trustworthy timing. Play-by-play shows the saved period/game/shot context while retaining append order. No quarter totals, minutes or plus-minus are derived yet.
 
 ## Failures and exports
 

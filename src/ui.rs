@@ -664,6 +664,7 @@ impl App {
                         column![
                             text(play.stat.label()).size(12).font(BOLD).color(accent),
                             text(format!("#{} {}", player.jersey, player.name)).size(13),
+                            text(play.clock_label()).size(10).color(c.muted),
                         ]
                         .spacing(5)
                         .width(Fill),

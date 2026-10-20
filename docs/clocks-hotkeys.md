@@ -10,9 +10,17 @@ Set times pauses both clocks and allows a game time in MM:SS (up to 24 hours) an
 
 Made field goals, defensive rebounds, steals and turnovers reset the shot clock to 24. Offensive rebounds reset it to 14. Called personal, technical, unsportsmanlike and disqualifying fouls pause both clocks. Free throws and warnings leave clock operation unchanged. These are the implemented v2 action mappings; operators can correct clocks manually. Undo removes the latest stat without rewinding elapsed clock time.
 
+## Event timing
+
+Each new stat stores its period and exact game/shot milliseconds at entry, before the action resets or pauses a clock. Play-by-play shows that saved context, for example `P2 05:11 / SHOT 4.8`, using the same rounded-up display as the live clocks. The recorded clock also retains its running flags. Later time corrections, period advances and reopening never change an earlier event's stamp. Feed order follows entry order, even when a clock is corrected backward.
+
+Events recorded before schema 4 show **Time not recorded**. Their times cannot be reconstructed from the current clock and are never inferred. Undo preserves the original event and stamp in the audit trail while removing it from the active feed. This slice supplies timing for future period summaries; it does not yet calculate quarter scores, minutes or plus-minus.
+
 ## Saving and recovery
 
 Clock commands and stats share one SQLite revision lane. Stats and their clock side effects commit in the same transaction. A failed save freezes the displayed clock projection, leaves the committed score intact, and retains one command for Retry. No later actions run until it saves or the operator explicitly reopens a match to discard it.
+
+The event stamp commits in that same transaction. Retry preserves the clock at the original stat entry, rather than stamping the time when storage becomes available again.
 
 Closing a match by navigation, closing the window, or using macOS Quit saves the remaining milliseconds paused. Reopening always starts paused and excludes the closed interval. Normal Quit stays open when a save is pending. The macOS adapter cancels AppKit's native termination request and forwards it to the same save path; recheck this behavior when upgrading Iced/winit. If adapter installation fails, an error directs the operator to use the window close button.
 

@@ -109,6 +109,22 @@ pub struct Play {
     pub side: Side,
     pub player_id: i64,
     pub stat: Stat,
+    /// Clock at entry, before stat effects. None means timing was never recorded.
+    pub clock: Option<clock::ClockState>,
+}
+
+impl Play {
+    pub fn clock_label(&self) -> String {
+        match self.clock {
+            Some(stamp) => format!(
+                "P{} {} / SHOT {}",
+                stamp.period,
+                clock::format_game(stamp.game_ms),
+                clock::format_shot(stamp.shot_ms)
+            ),
+            None => "Time not recorded".into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -273,6 +289,7 @@ impl Game {
             side,
             player_id,
             stat,
+            clock: None,
         });
         self.selected = None;
         true

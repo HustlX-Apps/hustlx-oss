@@ -28,6 +28,8 @@ Run `cargo run --locked`, then:
 
 Team and player names and rosters are copied into each new match. Later library edits preserve its history. The library starts empty; screenshots use synthetic test data.
 
+New stat events also retain their period and game/shot readings before clock effects. Play-by-play shows that saved context after restart; older events without timing show **Time not recorded**. See [event timing evidence](docs/evidence/clock-stamped-events/README.md).
+
 ![Saved native match reopened after restart](docs/evidence/native-lineups/reopened-match.jpg)
 
 [Match library](docs/evidence/hustlx-branding/matches-dark.jpg), [light theme](docs/evidence/hustlx-branding/game-day-light.jpg), and [current visual evidence](docs/evidence/hustlx-branding/README.md). [SQLite verification](docs/evidence/sqlite-library/README.md) records the original create/restart journey. See [local storage](docs/storage.md) for data locations and save/retry behavior.

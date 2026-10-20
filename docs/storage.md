@@ -21,7 +21,7 @@ SQLite is bundled with the Rust executable. Normal data locations are:
 
 The application creates the directory on first launch and starts with an empty catalog. The database and its journal sidecars belong to the operator and must never be committed to Git. No data is sent to HustlX. There is no cloud backup or database encryption in this slice.
 
-## Schema version 3
+## Schema version 4
 
 | Table | Responsibility |
 | --- | --- |
@@ -32,13 +32,17 @@ The application creates the directory on first launch and starts with an empty c
 | `match_clocks` | Durable game/shot milliseconds, period, and running flags |
 | `lineup_commands` | Append-only starter/substitution receipts, side, before/after court order and clock context |
 | `clock_commands` | UUID receipts for idempotent clock commands |
-| `match_events` | Append-only record/undo commands, UUIDs, actors, stats, and undo targets |
+| `match_events` | Append-only record/undo commands, UUIDs, actors, stats, undo targets and nullable pre-action clock snapshots |
 
-Foreign keys scope events to a match roster and undo targets to their match. SQLite application ID `0x48584f53` identifies this app; `user_version=3` identifies the schema. First schema creation and the explicit version 1 to 2 and 2 to 3 migrations are transactional. Matches upgrading from schema 1 receive period 1, 10:00/24, both paused, because version 1 stored no clock truth. The migration adds profile/snapshot fields without rewriting events or historical jerseys. This version refuses newer/foreign schemas and existing unrecognized tables. It does not rewrite, downgrade, or replace them. The migration is forward-only. Before upgrading, copy the closed library directory. Schema 2 to 3 adds lineup history without modifying existing court flags/order, clocks or stats. Older matches have no confirmed starter selection until the operator saves it; the app never infers starters from the current lineup. An older binary refuses schema 3; rollback requires that pre-upgrade copy in a separate directory.
+Foreign keys scope events to a match roster and undo targets to their match. SQLite application ID `0x48584f53` identifies this app; `user_version=4` identifies the schema. First schema creation and the explicit version 1 to 2, 2 to 3 and 3 to 4 migrations are transactional. Matches upgrading from schema 1 receive period 1, 10:00/24, both paused, because version 1 stored no clock truth. The migration adds profile/snapshot fields without rewriting events or historical jerseys. This version refuses newer/foreign schemas and existing unrecognized tables. It does not rewrite, downgrade, or replace them. The migration is forward-only. Before upgrading, copy the closed library directory. Schema 2 to 3 adds lineup history without modifying existing court flags/order, clocks or stats. Older matches have no confirmed starter selection until the operator saves it; the app never infers starters from the current lineup. An older binary refuses schema 4; rollback requires that pre-upgrade copy in a separate directory.
+
+Schema 3 to 4 adds nullable `game_ms`, `shot_ms`, `period`, `running` and `shot_running` to stat events. A stamp is either wholly unknown or a complete valid clock on a record event. Existing rows stay null, including undone events; event IDs, undo links, revision, rosters, lineups and current clocks are preserved. New desktop stat entries capture the live clock before shot resets or foul pauses. The renderer-independent `Store::record` helper without an explicit live clock uses the last saved baseline; callers operating a running clock use `record_with_clock` with its pre-action projection. Synthetic in-memory `Game::record` has no clock source and leaves timing unknown.
 
 ## Save and retry behavior
 
 A stat/undo/clock/lineup command carries a UUID and expected match revision. An immediate transaction checks identity and revision, appends the event or command receipt, updates the revision, loads the projection, and commits before the UI changes. Exact command retries return saved state without applying the stat twice. Reusing a UUID for a different command fails. Undo adds an event pointing at the last remaining recorded play; it does not delete history.
+
+Stat retries with an explicit clock must match the originally recorded clock, including running flags. The session captures that pre-action clock once and retains it while a save is pending. Event timing, stat side effects, current clock and revision roll back together on failure. Corrections and period advances change only current clock truth, never earlier event stamps; undo retains those stamps in the append-only audit history.
 
 WAL and synchronous FULL are enabled. Another writer can make the database busy; calls wait at most 250 ms before surfacing a storage error. If a stat, clock or lineup save fails, the old score and committed court remain (stat failures also preserve player selection), the footer shows SAVE PENDING, and further stat entry is disabled. Retry save reuses the same command. A stale-window error requires reopening from Matches to load current committed state.
 
