@@ -52,3 +52,11 @@ Each slice should produce a reviewable change, matching documentation, and evide
 
 - [ ] Design optional paid-league syncing against the actual HustlX server contract.
 - [ ] Add entitlement validation, explicit linking, retries, deduplication, and conflict handling without blocking offline games.
+
+## Local multi-sport flows
+
+- [x] Configure and create Volleyball, Pickleball, Table Tennis, Tennis, Badminton and Padel matches with named sides.
+- [x] Persist sport-specific scoring, serving, unit results, explicit completion and undo across restart.
+- [x] Preserve basketball history through schema 4 and isolate its controls from set/rally sports.
+- [x] Capture native setup/scoring/result evidence and complete Cargo verification.
+- [ ] Add advanced participant statistics and full web-console parity in separately scoped work.
