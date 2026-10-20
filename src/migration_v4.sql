@@ -1,14 +1,23 @@
--- Earlier stat events have no trustworthy clock context. Keep their stamps NULL.
-ALTER TABLE match_events ADD COLUMN game_ms INTEGER CHECK(game_ms BETWEEN 0 AND 86400000);
-ALTER TABLE match_events ADD COLUMN shot_ms INTEGER CHECK(shot_ms BETWEEN 0 AND 120000);
-ALTER TABLE match_events ADD COLUMN period INTEGER CHECK(period BETWEEN 1 AND 999);
-ALTER TABLE match_events ADD COLUMN running INTEGER CHECK(running IN (0,1));
-ALTER TABLE match_events ADD COLUMN shot_running INTEGER CHECK(shot_running IN (0,1))
-    CHECK(
-        (game_ms IS NULL AND shot_ms IS NULL AND period IS NULL AND running IS NULL AND shot_running IS NULL)
-        OR
-        (kind='record' AND game_ms IS NOT NULL AND shot_ms IS NOT NULL AND period IS NOT NULL
-            AND running IS NOT NULL AND shot_running IS NOT NULL
-            AND (shot_running=0 OR (running=1 AND shot_ms>0))
-            AND (running=0 OR game_ms>0))
-    );
+-- Existing match rows and basketball history retain their identities and meaning.
+ALTER TABLE matches ADD COLUMN sport TEXT NOT NULL DEFAULT 'basketball'
+    CHECK(sport IN ('basketball','volleyball','pickleball','table-tennis','tennis','badminton','padel'));
+CREATE TABLE sport_matches (
+    match_id INTEGER PRIMARY KEY REFERENCES matches(id),
+    local_id TEXT NOT NULL UNIQUE,
+    rules_version INTEGER NOT NULL CHECK(rules_version=1),
+    rules_json TEXT NOT NULL
+);
+CREATE TABLE sport_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    match_id INTEGER NOT NULL REFERENCES sport_matches(match_id),
+    command_id TEXT NOT NULL UNIQUE,
+    payload_version INTEGER NOT NULL CHECK(payload_version=1),
+    kind TEXT NOT NULL CHECK(kind IN ('record','undo')),
+    payload TEXT,
+    target_id INTEGER UNIQUE,
+    UNIQUE(match_id,id),
+    FOREIGN KEY(match_id,target_id) REFERENCES sport_events(match_id,id),
+    CHECK((kind='record' AND payload IS NOT NULL AND target_id IS NULL)
+       OR (kind='undo' AND payload IS NULL AND target_id IS NOT NULL))
+);
+CREATE INDEX sport_events_match_order ON sport_events(match_id,id);

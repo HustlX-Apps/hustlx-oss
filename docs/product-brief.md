@@ -4,7 +4,7 @@ Recorded October 16, 2026. This captures the initial product request, not shippe
 
 ## Confirmed direction
 
-HustlX OSS uses Rust throughout its interface and domain logic. The user confirmed Rust-rendered UI on October 16, 2026; Iced is the initial rendering toolkit. It is a desktop basketball Game Day application for Windows and macOS. Follow the existing web Game Day v2 UI as closely as practical. Document decisions, behavior, setup, and verification as the project develops.
+HustlX OSS uses Rust throughout its interface and domain logic. The user confirmed Rust-rendered UI on October 16, 2026; Iced is the initial rendering toolkit. It is a desktop Game Day application for Windows and macOS. On October 20, 2026, the approved scope expanded to Volleyball, Pickleball, Table Tennis, Tennis (also called Long Tennis), Badminton and Padel. Follow the existing web Game Day v2 UI as closely as practical. Document decisions, behavior, setup, and verification as the project develops.
 
 The local product contains teams, players, and matches. A league, season, bracket, standings system, online account, or hosted backend is not required to run a game.
 
@@ -31,7 +31,7 @@ The local product contains teams, players, and matches. A league, season, bracke
 
 Optional syncing to an eligible paid HustlX league comes later. Entitlement validation, account linking, match mapping, conflict resolution, and the server contract are not designed or implemented yet. Do not invent API routes or copy server assumptions into the desktop product.
 
-Other sports, league management, payments, livestreaming, and simultaneous multi-device operation are outside the first release.
+League management, payments, livestreaming, simultaneous multi-device operation, advanced player statistics for the six new sports and complete web-console parity remain outside this slice.
 
 ## License decision
 
@@ -42,3 +42,7 @@ MIT was selected on October 19, 2026 for project code and documentation, includi
 - First export formats. CSV for analysis and JSON for portable backups are proposed; printable/PDF output can follow.
 - Minimum OS versions, supported CPU architectures, installer signing, and release distribution.
 - First-release basketball configuration defaults and correction behavior, grounded in the existing operator workflows before implementation.
+
+## Approved multi-sport journey
+
+Choose a sport, enter two named sides and match details, configure local rules, record rallies or points, correct through undo, explicitly complete the decided match and reopen the saved result. A match needs no online account, league or catalog roster. Each sport retains its scoring and service semantics. Rules are match-time snapshots, and corrections preserve the command history.

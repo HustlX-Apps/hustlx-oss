@@ -2,6 +2,12 @@
 
 Recorded October 20, 2026 on macOS Apple Silicon from branch `codex/oss-clock-stamped-events`, implementation commit `80fc40f`, [PR #4](https://github.com/HustlX-Apps/hustlx-oss/pull/4). Synthetic teams/players only, in an isolated temporary library. Screenshots show the running Iced application at its 1100-point minimum width, 2200-pixel Retina captures; no browser or hosted service was used.
 
+## Develop integration
+
+After PR #5 merged as `bc5cc8b`, its multi-sport migration retained schema 4 and event timing moved unchanged to `src/migration_v5.sql`. The original screenshots and verification below describe commit `80fc40f`; they are not new UI captures of the combined build.
+
+The combined build passed `cargo fmt --all -- --check`, `cargo test --locked --offline --workspace --all-targets` (90 tests), `cargo clippy --locked --offline --workspace --all-targets -- -D warnings`, `cargo build --locked --offline` and `git diff --cached --check`. The new schema 4 upgrade regression failed before the migration fix, then passed, preserving sport local UUID/rules JSON, rally/undo history, revision, saved sport projection and unknown legacy basketball timing. Existing schema 1/2/3, basketball clock-event and six-sport suites remain enabled. No fresh native UI or Windows/macOS Intel run was performed for this conflict resolution.
+
 ## Native journey
 
 1. Opened a disposable schema 3 library containing one old made three and a paused period 2 clock at exactly 310125 game milliseconds and 4750 shot milliseconds. The app upgraded it to schema 4 without changing the old event or current clock.

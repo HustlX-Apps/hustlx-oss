@@ -16,7 +16,7 @@ References checked October 16, 2026: [Iced 0.14 documentation](https://docs.rs/i
 ## Implemented boundaries
 
 - `src/lib.rs` owns stable player identity, side-scoped event-derived player/team statistics, selection, and undo projection. It has no renderer dependency.
-- `src/storage.rs`, `src/schema.sql` and `src/migration_v2.sql` through `src/migration_v4.sql` own SQLite schema version 4, catalog operations, match creation, snapshots, and record/undo transactions. Form values use bound parameters; the UI does not issue SQL.
+- `src/storage.rs`, `src/schema.sql` and `src/migration_v2.sql` through `src/migration_v5.sql` own SQLite schema version 5, catalog operations, match creation, snapshots, and record/undo transactions. Form values use bound parameters; the UI does not issue SQL.
 - `src/session.rs` owns the active committed match and one pending command. A write failure leaves visible stats and selection unchanged. Retry uses the same UUID.
 - `src/ui.rs` and `src/library_ui.rs` own native Iced navigation, forms, and the v2 console. SQLite calls run synchronously with a bounded 250 ms busy timeout. Larger libraries may require background loading later.
 
@@ -24,7 +24,7 @@ SQLite is the durable source of truth. Read transactions load metadata, rosters,
 
 Catalog players and teams have local integer IDs; names and jersey labels are not keys. Match creation copies active team names and memberships into per-side snapshots. Renaming, archiving, or changing catalog memberships cannot rewrite saved match attribution. A player may belong to multiple teams, including both sides; the match side and player ID identify the actor together. Empty rosters are valid.
 
-The database uses foreign keys, WAL, and synchronous FULL. First open creates schema 1 and migrates through schema 4 transactionally. Newer, foreign, and corrupt databases fail visibly without a reset. The additive migrations preserve existing events, snapshots, court flags and clock truth. Schema 3 adds lineup receipts/history without inferring unknown starters. Schema 4 adds pre-action clock context to stat events; legacy timing stays unknown. No downgrade path exists; preserve a pre-upgrade backup. See [storage](storage.md) for paths, schema, and preservation boundaries.
+The database uses foreign keys, WAL, and synchronous FULL. First open creates schema 1 and migrates through schema 5 transactionally. Newer, foreign, and corrupt databases fail visibly without a reset. The additive migrations preserve existing events, snapshots, court flags and clock truth. Schema 3 adds lineup receipts/history without inferring unknown starters. Schema 4 adds the standalone multi-sport tables. Schema 5 adds pre-action clock context to stat events; legacy timing stays unknown. No downgrade path exists; preserve a pre-upgrade backup. See [storage](storage.md) for paths, schema, and preservation boundaries.
 
 ## Future boundaries
 
@@ -48,3 +48,9 @@ Rust tests cover scoring, durable undo, duplicate commands, stale revisions, ato
 ## Lineups and substitutions
 
 `src/lineup.rs` owns ordered court selections, structural validation and local editor drafts. `src/lineup_storage.rs` writes the current court projection and an append-only before/after receipt with clock context in one transaction and one shared revision. Lineup UUIDs cannot collide with stat or clock commands. `SavedMatch::starting_lineup` reads the latest explicit starter selection separately from current on-court flags; substitutions never rewrite it. Side plus player ID remains identity. `src/lineup_ui.rs` provides the v2-style confirmation board and saved history. Count deviations are advisory; no rule/claim gates are added. See [operator guide](lineups-substitutions.md).
+
+## Standalone sport scoring
+
+`src/sport.rs` owns the typed local sport catalog, immutable rules and deterministic scoring/service transitions. `src/sport_storage.rs` persists versioned sport commands separately from basketball player statistics. `Session` routes sport commands and undo through its existing pending-save lane. `src/sport_ui.rs` owns setup and a native score/result console selected from the saved sport. Basketball clocks, hotkeys and lineups are guarded from these matches at the UI, session and store boundaries.
+
+The implementation reads Nuxt/API behavior as a reference and implements it natively; it imports no web runtime. The six new sports operate on named sides with numbered service slots. Advanced player attribution, full console parity and sync remain deferred. See [the sport guide](multi-sport.md).

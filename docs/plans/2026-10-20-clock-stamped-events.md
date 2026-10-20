@@ -2,7 +2,7 @@
 
 **Goal:** Preserve the period and exact game/shot milliseconds at stat entry and show them in native play-by-play.
 
-**Architecture:** Add nullable event clock fields in SQLite schema 4. The session freezes the pre-action clock in its existing pending command; storage commits that stamp, the stat, its clock effects and revision together. Old events retain unknown timing. No dependencies or hosted contracts change.
+**Architecture:** Add nullable event clock fields in SQLite schema 5. The session freezes the pre-action clock in its existing pending command; storage commits that stamp, the stat, its clock effects and revision together. Old events retain unknown timing. No dependencies or hosted contracts change.
 
 Repo set: hustlx-oss. Source of truth: Rust domain/session/storage and SQLite. Execution: terminal and native UI. Verification: Cargo tests, formatting, Clippy/build, native feed smoke check, shared verifier boundary and merge flagger. Documentation impact: local operator/storage/architecture/development docs and roadmap. The API/Nuxt clock and claim harnesses do not own this Rust-only change.
 
@@ -20,7 +20,11 @@ Repo set: hustlx-oss. Source of truth: Rust domain/session/storage and SQLite. E
 ## Checklist
 
 - [x] Write failing migration, stamp/reopen, clock-effect, correction/order, undo, retry and rollback tests.
-- [x] Implement schema 4, event context model, persistence and pre-action session capture; pass targeted tests.
+- [x] Implement schema 5, event context model, persistence and pre-action session capture; pass targeted tests.
 - [x] Display native event timing and unknown legacy timing; inspect both themes at minimum size.
 - [x] Update local docs and roadmap; run formatter, workspace tests, Clippy/build, shared gate and merge flagger. The shared gate excludes this Rust repo and was interrupted after selecting unrelated changes; see event timing evidence.
 - [x] Commit, push and open a PR targeting develop with evidence and remaining platform limits: [PR #4](https://github.com/HustlX-Apps/hustlx-oss/pull/4), implementation commit `80fc40f`.
+
+## Integration with develop
+
+PR #5 merged the standalone sport migration as schema 4 before this PR merged. Preserve that migration unchanged and apply event timing in `migration_v5.sql`. The schema 4 upgrade regression retains sport rules, local identity, active/undone history and legacy basketball events. Historical screenshots below the evidence guide refer to the original isolated implementation; current migration evidence is separate.

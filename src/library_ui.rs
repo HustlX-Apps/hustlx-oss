@@ -1,6 +1,7 @@
 use super::*;
 use chrono::Local;
-use hustlx_oss::storage::{Error, MatchDraft, Result};
+use hustlx_oss::sport::Sport;
+use hustlx_oss::storage::{Error, MatchDraft, Result, SportMatchDraft};
 use iced::widget::{checkbox, column, pick_list, text_input};
 
 pub(super) struct MatchForm {
@@ -108,14 +109,27 @@ impl App {
                     ));
                 }
                 let f = &self.match_form;
-                let draft = MatchDraft {
-                    name: f.name.clone(),
-                    date: f.date.clone(),
-                    venue: f.venue.clone(),
-                    home_team_id: f.home.as_ref().map_or(0, |t| t.id),
-                    away_team_id: f.away.as_ref().map_or(0, |t| t.id),
-                };
-                self.session_mut()?.create(&draft)?;
+                if self.sport_setup.sport == Sport::Basketball {
+                    let draft = MatchDraft {
+                        name: f.name.clone(),
+                        date: f.date.clone(),
+                        venue: f.venue.clone(),
+                        home_team_id: f.home.as_ref().map_or(0, |t| t.id),
+                        away_team_id: f.away.as_ref().map_or(0, |t| t.id),
+                    };
+                    self.session_mut()?.create(&draft)?;
+                } else {
+                    let draft = SportMatchDraft {
+                        name: f.name.clone(),
+                        date: f.date.clone(),
+                        venue: f.venue.clone(),
+                        home_name: self.sport_setup.home.clone(),
+                        away_name: self.sport_setup.away.clone(),
+                        sport: self.sport_setup.sport,
+                        rules: self.sport_setup.rules()?,
+                    };
+                    self.session_mut()?.create_sport(&draft)?;
+                }
                 self.lineup_draft = None;
                 self.lineup_history = false;
                 self.lineup_saving = false;
@@ -123,6 +137,7 @@ impl App {
                 self.show_hotkeys = false;
                 self.hotkeys.clear();
                 self.match_form = MatchForm::default();
+                self.sport_setup = sports::SportSetup::default();
                 self.screen = Screen::GameDay;
             }
             Message::MatchName(value) => self.match_form.name = value,
@@ -279,18 +294,65 @@ impl App {
             .filter(|t| !t.archived && f.home.as_ref().is_none_or(|home| home.id != t.id))
             .cloned()
             .collect::<Vec<_>>();
-        let form=column![
+        let mut form = column![
             text("Create a match").size(23).font(HEADING),
-            text("Choose your teams and save a local game.").size(12).color(c.muted),
-            field("Match name",text_input("Friday basketball",&f.name).on_input(Message::MatchName).padding(10).into(),c),
-            field("Date / YYYY-MM-DD",text_input("2026-10-16",&f.date).on_input(Message::MatchDate).padding(10).into(),c),
-            field("Venue (optional)",text_input("Court or venue",&f.venue).on_input(Message::MatchVenue).padding(10).into(),c),
-            field("Team A / home",pick_list(home_choices,f.home.as_ref(),Message::HomeTeam).placeholder("Select Team A").width(Fill).padding(10).into(),c),
-            field("Team B / away",pick_list(away_choices,f.away.as_ref(),Message::AwayTeam).placeholder("Select Team B").width(Fill).padding(10).into(),c),
-            button(text("Create and open match").size(14)).padding([12,16]).width(Fill)
-                .on_press_maybe((f.home.is_some() && f.away.is_some() && !self.pending()).then_some(Message::CreateMatch)),
-            text("Team names and active rosters are copied into this match. Later library edits keep its history intact.").size(12).color(c.muted),
-        ].spacing(16);
+            text("Choose a sport and save a local match.")
+                .size(12)
+                .color(c.muted),
+            field(
+                "Sport",
+                pick_list(
+                    Sport::ALL,
+                    Some(self.sport_setup.sport),
+                    Message::ChooseSport
+                )
+                .width(Fill)
+                .padding(10)
+                .into(),
+                c
+            ),
+            field(
+                "Match name",
+                text_input("Friday match", &f.name)
+                    .on_input(Message::MatchName)
+                    .padding(10)
+                    .into(),
+                c
+            ),
+            field(
+                "Date / YYYY-MM-DD",
+                text_input("YYYY-MM-DD", &f.date)
+                    .on_input(Message::MatchDate)
+                    .padding(10)
+                    .into(),
+                c
+            ),
+            field(
+                "Venue (optional)",
+                text_input("Court or venue", &f.venue)
+                    .on_input(Message::MatchVenue)
+                    .padding(10)
+                    .into(),
+                c
+            ),
+        ]
+        .spacing(16);
+        let ready = if self.sport_setup.sport == Sport::Basketball {
+            form = form
+                .push(field("Team A / home",pick_list(home_choices,f.home.as_ref(),Message::HomeTeam).placeholder("Select Team A").width(Fill).padding(10).into(),c))
+                .push(field("Team B / away",pick_list(away_choices,f.away.as_ref(),Message::AwayTeam).placeholder("Select Team B").width(Fill).padding(10).into(),c))
+                .push(text("Team names and active rosters are copied into this match. Later library edits keep its history intact.").size(12).color(c.muted));
+            f.home.is_some() && f.away.is_some()
+        } else {
+            form = form.push(self.sport_setup_view(c));
+            !self.sport_setup.home.trim().is_empty() && !self.sport_setup.away.trim().is_empty()
+        };
+        form = form.push(
+            button(text("Create and open match").size(14))
+                .padding([12, 16])
+                .width(Fill)
+                .on_press_maybe((ready && !self.pending()).then_some(Message::CreateMatch)),
+        );
         let mut list = column![
             row![
                 text("Your matches").size(23).font(HEADING),
@@ -298,7 +360,7 @@ impl App {
                 button(text("Refresh").size(12)).on_press(Message::Refresh)
             ]
             .align_y(alignment::Vertical::Center),
-            text("Open a saved game to continue recording stats.")
+            text("Open a saved match to continue or review its result.")
                 .size(12)
                 .color(c.muted)
         ]
@@ -306,7 +368,7 @@ impl App {
         if self.matches.is_empty() {
             list = list.push(empty(
                 "No matches yet",
-                "Start with Teams and Players, then create your first game.",
+                "Choose a sport to begin. Basketball uses your team library; other sports need only side names.",
                 c,
             ));
         }
@@ -315,6 +377,7 @@ impl App {
                 row![
                     column![
                         text(&m.name).size(17).font(HEADING),
+                        text(m.sport.label()).size(11).color(c.home),
                         text(format!("{} vs {}", m.home_name, m.away_name)).size(14),
                         text(format!(
                             "{} / {}",

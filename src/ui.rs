@@ -18,6 +18,8 @@ mod clocks;
 mod library;
 #[path = "lineup_ui.rs"]
 mod lineups;
+#[path = "sport_ui.rs"]
+mod sports;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
@@ -28,6 +30,13 @@ pub enum Screen {
 }
 #[derive(Debug, Clone)]
 pub enum Message {
+    ChooseSport(hustlx_oss::sport::Sport),
+    SportInput(sports::RuleField, String),
+    SportFormat(hustlx_oss::sport::Format),
+    SportScoring(hustlx_oss::sport::Scoring),
+    SportFirstServer(Side),
+    SportMatchTiebreak(bool),
+    SportCommand(hustlx_oss::sport::Command),
     OpenLineup(Side, hustlx_oss::lineup::LineupKind),
     CancelLineup,
     LineupPick(i64),
@@ -101,6 +110,7 @@ pub struct App {
     matches: Vec<MatchSummary>,
     roster: Vec<RosterEntry>,
     match_form: library::MatchForm,
+    sport_setup: sports::SportSetup,
     team_name: String,
     editing_team: Option<i64>,
     show_teams: bool,
@@ -127,7 +137,16 @@ pub struct App {
 }
 impl Default for App {
     fn default() -> Self {
-        let mut app = Self {
+        let mut app = Self::empty();
+        if let Err(error) = app.connect() {
+            app.error = Some(error.to_string());
+        }
+        app
+    }
+}
+impl App {
+    fn empty() -> Self {
+        Self {
             session: None,
             dark: true,
             screen: Screen::Matches,
@@ -137,6 +156,7 @@ impl Default for App {
             matches: vec![],
             roster: vec![],
             match_form: library::MatchForm::default(),
+            sport_setup: sports::SportSetup::default(),
             team_name: String::new(),
             editing_team: None,
             show_teams: false,
@@ -160,16 +180,17 @@ impl Default for App {
             lineup_draft: None,
             lineup_history: false,
             lineup_saving: false,
-        };
-        if let Err(error) = app.connect() {
-            app.error = Some(error.to_string());
         }
-        app
     }
-}
-impl App {
     fn update_core(&mut self, message: Message) {
         let result = match message {
+            message @ (Message::ChooseSport(..)
+            | Message::SportInput(..)
+            | Message::SportFormat(..)
+            | Message::SportScoring(..)
+            | Message::SportFirstServer(..)
+            | Message::SportMatchTiebreak(..)
+            | Message::SportCommand(..)) => self.update_sports(message),
             message @ (Message::OpenLineup(..)
             | Message::CancelLineup
             | Message::LineupPick(..)
@@ -210,6 +231,9 @@ impl App {
     }
     fn active(&self) -> Option<&SavedMatch> {
         self.session.as_ref().and_then(Session::active)
+    }
+    fn basketball_game_day(&self) -> bool {
+        self.screen == Screen::GameDay && self.active().is_some() && !self.is_sport_match()
     }
     fn game(&self) -> &Game {
         &self.active().expect("Game Day requires an open match").game
@@ -254,7 +278,7 @@ impl App {
                     .padding([8, 12]),
             );
         }
-        if self.screen == Screen::GameDay {
+        if self.basketball_game_day() {
             nav = nav.push(
                 button(text("Hotkeys ?").size(12))
                     .on_press(Message::ToggleHotkeys)
@@ -303,7 +327,9 @@ impl App {
                 text("Your existing data has not been replaced. Check the data folder, then retry.").size(14).color(c.muted),
                 button("Retry opening library").on_press(Message::RetryStorage)].spacing(18),c).width(Fill).height(Fill).into()
         } else if self.screen == Screen::GameDay && self.active().is_some() {
-            if self.lineup_draft.is_some() {
+            if self.is_sport_match() {
+                self.sport_view(c)
+            } else if self.lineup_draft.is_some() {
                 self.lineup_editor(c)
             } else if self.lineup_history {
                 self.lineup_history_view(c)
@@ -335,6 +361,8 @@ impl App {
                 }),
                 text(if self.pending() {
                     "Retry the save, or reopen a match to discard the unsaved action."
+                } else if self.is_sport_match() {
+                    "Offline library. Scores and results recover from saved history."
                 } else {
                     "Offline library. Clocks pause on close and reopen paused."
                 })

@@ -27,6 +27,97 @@ fn fixture(db: &mut Store) -> (i64, i64) {
 }
 
 #[test]
+fn schema_four_upgrade_preserves_sport_rules_history_and_legacy_basketball() {
+    use hustlx_oss::sport::{Command, Rules, Sport};
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("multi-sport-v4.sqlite3");
+    let raw = Connection::open(&path).unwrap();
+    for schema in [
+        include_str!("../src/schema.sql"),
+        include_str!("../src/migration_v2.sql"),
+        include_str!("../src/migration_v3.sql"),
+        include_str!("../src/migration_v4.sql"),
+    ] {
+        raw.execute_batch(schema).unwrap();
+    }
+    raw.pragma_update(None, "application_id", 0x48584f53)
+        .unwrap();
+    raw.pragma_update(None, "user_version", 4).unwrap();
+    raw.execute_batch("INSERT INTO teams(name) VALUES('Home'),('Away');
+        INSERT INTO players(name) VALUES('Alex');
+        INSERT INTO matches(id,name,date,home_team_id,away_team_id,home_name,away_name,revision,sport) VALUES
+            (1,'Basketball','2026-10-20',1,2,'Home','Away',1,'basketball'),
+            (2,'Volleyball','2026-10-20',1,2,'Home','Away',3,'volleyball');
+        INSERT INTO match_players(match_id,side,player_id,name,jersey,on_court,sort_order) VALUES(1,'home',1,'Alex','7',1,0);
+        INSERT INTO match_clocks(match_id,period,game_ms,shot_ms) VALUES(1,2,310125,4750),(2,1,600000,24000);
+        INSERT INTO match_events(id,match_id,command_id,kind,side,player_id,stat) VALUES(1,1,'old-basketball','record','home',1,'three_made');").unwrap();
+    let rules = serde_json::to_string(&Rules::defaults(Sport::Volleyball)).unwrap();
+    let rally = serde_json::to_string(&Command::Rally(Side::Home)).unwrap();
+    let local_id = Uuid::new_v4().to_string();
+    raw.execute(
+        "INSERT INTO sport_matches(match_id,local_id,rules_version,rules_json) VALUES(2,?1,1,?2)",
+        rusqlite::params![local_id, rules],
+    )
+    .unwrap();
+    raw.execute("INSERT INTO sport_events(id,match_id,command_id,payload_version,kind,payload) VALUES(1,2,'rally-one',1,'record',?1),(2,2,'rally-two',1,'record',?1)", [&rally]).unwrap();
+    raw.execute("INSERT INTO sport_events(id,match_id,command_id,payload_version,kind,target_id) VALUES(3,2,'undo-two',1,'undo',2)", []).unwrap();
+    drop(raw);
+
+    let mut db = Store::open(&path).unwrap();
+    let basketball = db.load_match(1).unwrap();
+    assert_eq!(basketball.game.score(Side::Home), 3);
+    assert_eq!(basketball.game.plays()[0].clock, None);
+    assert_eq!(basketball.summary.revision, 1);
+    let volleyball = db.load_match(2).unwrap();
+    assert_eq!(volleyball.summary.sport, Sport::Volleyball);
+    assert_eq!(volleyball.summary.revision, 3);
+    assert_eq!(volleyball.sport_history.len(), 3);
+    assert!(!volleyball.sport_history[0].undone);
+    assert!(volleyball.sport_history[1].undone);
+    let state = serde_json::to_value(&volleyball.sport_state).unwrap();
+    let stamped = db
+        .record(1, 1, Uuid::new_v4(), Side::Home, 1, Stat::Assist)
+        .unwrap();
+    assert_eq!(stamped.game.plays()[0].clock, None);
+    assert_eq!(stamped.game.plays()[1].clock, Some(basketball.clock));
+    drop(db);
+    let db = Store::open(&path).unwrap();
+    assert_eq!(
+        serde_json::to_value(db.load_match(2).unwrap().sport_state).unwrap(),
+        state
+    );
+    let raw = Connection::open(path).unwrap();
+    assert_eq!(
+        raw.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+            .unwrap(),
+        5
+    );
+    let stored: (String, String) = raw
+        .query_row(
+            "SELECT local_id,rules_json FROM sport_matches WHERE match_id=2",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(stored, (local_id, rules));
+    assert_eq!(
+        raw.query_row("SELECT payload FROM sport_events WHERE id=1", [], |r| {
+            r.get::<_, String>(0)
+        })
+        .unwrap(),
+        rally
+    );
+    assert_eq!(
+        raw.query_row("SELECT target_id FROM sport_events WHERE id=3", [], |r| r
+            .get::<_, i64>(
+            0
+        ))
+        .unwrap(),
+        2
+    );
+}
+
+#[test]
 fn live_events_capture_exact_pre_action_clocks_before_resets_and_foul_pause() {
     let mut db = Store::open(":memory:").unwrap();
     let (id, player) = fixture(&mut db);
@@ -342,7 +433,7 @@ fn schema_three_upgrade_preserves_unknown_history_and_only_stamps_new_events() {
     assert_eq!(
         raw.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        4
+        5
     );
     assert_eq!(
         raw.query_row("SELECT target_id FROM match_events WHERE id=3", [], |r| r

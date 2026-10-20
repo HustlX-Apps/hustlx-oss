@@ -1,8 +1,8 @@
 # HustlX OSS
 
-Offline-first basketball Game Day for Windows and macOS, built around a Rust core and the HustlX web Game Day v2 experience.
+Offline-first Game Day for Windows and macOS, built with Rust, Iced and SQLite. Run Volleyball, Pickleball, Table Tennis, Tennis (Long Tennis), Badminton and Padel matches locally alongside the existing basketball console.
 
-**Status:** native Rust application in development, licensed under MIT. The Iced interface now supports a SQLite team/player library, roster editing, match creation and reopening, durable stat entry/undo, game/shot clocks, jersey/position profiles, supported web v2 hotkeys, starting lineups and confirmed substitutions. Exports and installers remain planned.
+**Status:** native Rust application in development, licensed under MIT. The Iced interface now supports a SQLite team/player library, roster editing, match creation and reopening, durable stat entry/undo, game/shot clocks, jersey/position profiles, supported web v2 hotkeys, starting lineups and confirmed substitutions. The six additional sports support configurable side-level scoring, service state, durable undo, explicit completion and reopened results. Cloud sync, advanced statistics for those sports, exports and installers remain planned.
 
 The interface uses the official HustlX wordmarks, Inter body text, Exo headings and Exo Black scores, bundled for offline use. See [branding](docs/branding.md).
 
@@ -15,7 +15,13 @@ The interface uses the official HustlX wordmarks, Inter body text, Exo headings 
 - Reopen saved matches, view results and player statistics, and export files locally.
 - Later, optionally sync with an eligible paid league on HustlX. Local game operation must remain independent of connectivity and subscription state.
 
-## Try the local library
+## Run a local sport match
+
+Run `cargo run --locked`, open **Matches**, choose a sport, enter two side names and match details, review the local rules, then create the match. Award rallies, correct with Undo and finish the decided match. Reopen it after restarting to see the saved score, service and result. See [sport workflows and limits](docs/multi-sport.md) and [verification evidence](docs/evidence/multi-sport/README.md).
+
+No league, login, server or runtime network access is required. Side names may represent teams, individual players or pairs.
+
+## Try the basketball library
 
 Run `cargo run --locked`, then:
 

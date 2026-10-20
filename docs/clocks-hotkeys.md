@@ -14,7 +14,7 @@ Made field goals, defensive rebounds, steals and turnovers reset the shot clock 
 
 Each new stat stores its period and exact game/shot milliseconds at entry, before the action resets or pauses a clock. Play-by-play shows that saved context, for example `P2 05:11 / SHOT 4.8`, using the same rounded-up display as the live clocks. The recorded clock also retains its running flags. Later time corrections, period advances and reopening never change an earlier event's stamp. Feed order follows entry order, even when a clock is corrected backward.
 
-Events recorded before schema 4 show **Time not recorded**. Their times cannot be reconstructed from the current clock and are never inferred. Undo preserves the original event and stamp in the audit trail while removing it from the active feed. This slice supplies timing for future period summaries; it does not yet calculate quarter scores, minutes or plus-minus.
+Events recorded before schema 5 show **Time not recorded**. Their times cannot be reconstructed from the current clock and are never inferred. Undo preserves the original event and stamp in the audit trail while removing it from the active feed. This slice supplies timing for future period summaries; it does not yet calculate quarter scores, minutes or plus-minus.
 
 ## Saving and recovery
 
