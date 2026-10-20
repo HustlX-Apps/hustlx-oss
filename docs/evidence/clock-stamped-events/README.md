@@ -1,6 +1,6 @@
 # Clock-stamped event evidence
 
-Recorded October 20, 2026 on macOS Apple Silicon from branch `codex/oss-clock-stamped-events`. Synthetic teams/players only, in an isolated temporary library. Screenshots show the running Iced application at its 1100-point minimum width, 2200-pixel Retina captures; no browser or hosted service was used.
+Recorded October 20, 2026 on macOS Apple Silicon from branch `codex/oss-clock-stamped-events`, implementation commit `80fc40f`, [PR #4](https://github.com/HustlX-Apps/hustlx-oss/pull/4). Synthetic teams/players only, in an isolated temporary library. Screenshots show the running Iced application at its 1100-point minimum width, 2200-pixel Retina captures; no browser or hosted service was used.
 
 ## Native journey
 

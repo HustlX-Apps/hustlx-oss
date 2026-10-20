@@ -23,4 +23,4 @@ Repo set: hustlx-oss. Source of truth: Rust domain/session/storage and SQLite. E
 - [x] Implement schema 4, event context model, persistence and pre-action session capture; pass targeted tests.
 - [x] Display native event timing and unknown legacy timing; inspect both themes at minimum size.
 - [x] Update local docs and roadmap; run formatter, workspace tests, Clippy/build, shared gate and merge flagger. The shared gate excludes this Rust repo and was interrupted after selecting unrelated changes; see event timing evidence.
-- [ ] Commit, push and open a PR targeting develop with evidence and remaining platform limits.
+- [x] Commit, push and open a PR targeting develop with evidence and remaining platform limits: [PR #4](https://github.com/HustlX-Apps/hustlx-oss/pull/4), implementation commit `80fc40f`.
