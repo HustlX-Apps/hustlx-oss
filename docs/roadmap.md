@@ -4,6 +4,8 @@ Each slice should produce a reviewable change, matching documentation, and evide
 
 ## Foundation
 
+- [x] Add automatic SemVer bump/preview, native three-target package CI, and explicit GitHub Release publication automation. See [release guide](releases.md). Actual publication and platform launch certification are separate release actions.
+
 - [x] Create an independent local repository named hustlx-oss.
 - [x] Record the initial scope and proposed architecture.
 - [x] Capture dark and light references from the real web v2 components with sample data.

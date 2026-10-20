@@ -1,10 +1,10 @@
-# Version preparation and local desktop packages
+# Desktop versions, builds and GitHub Releases
 
-These commands prepare source versions and build local packages. They never create tags, push branches, upload artifacts, publish GitHub Releases or publish to crates.io. No release has been published. The app remains a development build; project code and documentation use the [MIT License](../LICENSE), and release-readiness checks are still pending.
+Use local Cargo commands to prepare versions and packages, and the separate GitHub command to build all release targets or explicitly publish. Publishing is disabled by default. Installing this automation, opening a PR, merging a PR, or pushing a tag does not publish a release. No release was published while implementing this tooling. The app remains a development build; project code and documentation use the [MIT License](../LICENSE).
 
 ## Branches
 
-`develop` is the default integration branch. PR #1 carries the initial desktop implementation and tooling into it. `main` was created from the existing develop baseline, without merging that implementation. Promote reviewed stable changes from develop to main through a separate PR later. Packaging does not merge or change branches.
+`develop` is the default integration branch. Prepare versions on a clean feature branch through a PR targeting develop. Promote reviewed release changes from develop to main through a separate PR. Publishing requires the exact main commit and matching Cargo version. The workflow does not merge PRs or push protected branches. Merge the release workflow into the default branch before manual dispatch becomes available; promote it to main before publishing from main.
 
 ## Version command
 
@@ -12,12 +12,55 @@ Run from the repository root with Rust installed:
 
 ```sh
 cargo xtask version
-cargo xtask version 0.2.0
+cargo xtask version --bump patch --dry-run
+cargo xtask version --bump patch
+cargo xtask version 0.2.0-beta.1 --dry-run
+cargo xtask version 0.2.0-beta.1
 ```
 
-The first command prints the current app version. The second updates only the `hustlx-oss` package version in Cargo.toml and Cargo.lock. It does not change dependency versions or the xtask tool version. Review and commit that diff on a feature branch through a PR before a real release. Keep version preparation separate from other Cargo operations. If a write is interrupted, restore both version files from Git; packaging refuses mismatched versions.
+`--bump patch|minor|major` computes the next version and resets lower components. `--dry-run` prints the proposed version without changing files. An exact version supports prereleases; automatic bumps reject prerelease/build versions to avoid guessing their graduation policy. A version write updates only the app entries in Cargo.toml and Cargo.lock, preserving dependency and xtask versions. Review and commit that diff on a feature branch through a PR. Keep version preparation separate from other Cargo operations. If a write is interrupted, restore both version files from Git; packaging refuses mismatched versions.
 
-Versions use SemVer without a `v` prefix, such as `0.2.0` or `0.2.0-beta.1`. The repository remains at 0.1.0 until a maintainer prepares another version.
+Versions use SemVer without a `v` prefix, such as `0.2.0` or `0.2.0-beta.1`. Git tags use `vVERSION`. Implementation of this automation leaves the source version at 0.1.0.
+
+## Build all desktop packages on GitHub
+
+Install Python 3.9+ and the authenticated GitHub CLI. Run these commands from this repository. Bash and PowerShell both support this command syntax; Windows may use `python` instead of `python3`.
+
+Obtain the exact remote branch commit using `git fetch origin` and `git rev-parse origin/develop`. Substitute that full 40-character SHA for FULL_SHA, and use the Cargo version at that commit:
+
+```sh
+python3 scripts/github_release.py dispatch --version 0.1.0 --sha FULL_SHA --ref develop --dry-run
+python3 scripts/github_release.py dispatch --version 0.1.0 --sha FULL_SHA --ref develop
+gh run list --repo HustlX-Apps/hustlx-oss --workflow release.yml
+gh run watch RUN_ID --repo HustlX-Apps/hustlx-oss --exit-status
+gh run download RUN_ID --repo HustlX-Apps/hustlx-oss --pattern 'desktop-*' --dir artifacts
+python3 scripts/github_release.py collect --version 0.1.0
+```
+
+The first dispatch command prints the plan and makes no GitHub request. The second starts a build with `publish=false`, producing Actions artifacts only. Relevant source/tooling PRs also run this lane without publishing. Native runners test, lint, compile optimized applications, and package macOS Apple Silicon, macOS Intel and Windows x64 from the same exact commit. A final job checks every ZIP and checksum. Build artifacts expire after seven days. `collect` creates a fresh release-assets directory containing three ZIPs and an aggregate SHA256SUMS; preserve or move an existing destination before retrying.
+
+## Publish when a release is authorized
+
+Complete the [release checklist](qa-checklists/desktop-release.md), merge the version PR to develop, and promote the reviewed release to main. Fetch and obtain `git rev-parse origin/main`; use that exact SHA and matching version:
+
+```sh
+python3 scripts/github_release.py dispatch --version 0.1.0 --sha FULL_MAIN_SHA --ref main --publish --dry-run
+python3 scripts/github_release.py dispatch --version 0.1.0 --sha FULL_MAIN_SHA --ref main --publish
+```
+
+Only the second command authorizes remote publication. GitHub's workflow-dispatch UI has the same version, source_sha and publish inputs; publish defaults to false. Validation rejects wrong source/version, publication from develop and existing tags. The publish job requires a manual publish=true dispatch on main in this repository, after every native build and asset check succeeds. Only that job receives contents:write; build jobs have read-only permissions and do not persist checkout credentials. GitHub provides the job token; no personal token or signing credentials are required.
+
+Publication creates an immutable-source `vVERSION` tag, generates notes with source/signing disclosures, creates a draft, uploads three ZIPs plus aggregate SHA256SUMS, then publishes. Versions such as `0.2.0-beta.1` create prereleases and never become Latest. This publishes downloadable desktop packages to GitHub Releases, not crates.io or an app store. Installers, official signing and notarization remain separate work.
+
+### Failure and recovery
+
+A failed build or asset check creates no tag or release. A failure after tag creation may leave a tag and draft. Upload failure leaves the draft unpublished; an ambiguous final network error requires inspection because the server may have completed publication. The workflow refuses existing exact tags, never moves them, and never clobbers assets. API/permission errors stop the run instead of being treated as absence.
+
+Inspect `gh run view RUN_ID --repo HustlX-Apps/hustlx-oss --log-failed` and `gh release view vVERSION --repo HustlX-Apps/hustlx-oss`. Preserve the tag, draft and artifacts. A maintainer must choose a new version or explicitly authorize recovery of the exact draft after checking its source, digests and missing uploads. Do not delete or force-push a public tag as a retry shortcut.
+
+## Agent skill and command
+
+In the umbrella workspace, `/oss-release prepare patch`, `/oss-release build VERSION`, `/oss-release publish VERSION` and `/oss-release status` load the optional canonical `.agents/skill-library/hustlx-oss-release/SKILL.md`. AgentSync exposes the skill/command to Claude and Cursor. Codex can explicitly load that library path and request a mode without expanding its default catalog. Preparation handles the version branch, verification and PR; it does not publish or auto-merge. Rust/Python commands also work in a standalone clone.
 
 ## Preview the build plan
 
@@ -82,4 +125,4 @@ cargo test --locked --workspace --all-targets
 cargo clippy --locked --workspace --all-targets -- -D warnings
 ```
 
-Tests build archives from temporary synthetic fixtures and verify extraction and checksum generation. macOS additionally compiles a tiny fixture app and validates its plist and ad-hoc signature. Windows checksums use .NET SHA256 directly inside PowerShell so inherited module paths do not require Get-FileHash. CI dry-runs both OS wrappers. It does not build/upload actual release packages. [Implementation evidence](evidence/release-tooling/README.md) records the tested scope.
+Also run `python3 -m unittest discover -s scripts -p test_github_release.py -v` and `actionlint .github/workflows/release.yml .github/workflows/rust.yml` when changing release automation. Tests cover version preview/bumping, platform package fixtures, tampered/missing artifacts, exact-source validation, publish authorization, existing tags, draft upload failure, and prerelease behavior. GitHub mutations are mocked in unit tests. `rust.yml` dry-runs native wrappers; the separate release workflow builds and uploads real optimized packages. macOS fixture tests validate plist/ad-hoc signatures. Windows checksums use .NET SHA256 without module auto-loading. See [original local tooling evidence](evidence/release-tooling/README.md) and [automation evidence](evidence/github-releases/README.md) for the tested scope.
