@@ -153,11 +153,7 @@ impl Session {
         let Some((side, player)) = self.active.as_ref().and_then(|a| a.game.selected) else {
             return Err(Error::Validation("Select a player first.".into()));
         };
-        self.begin(
-            Action::Record(side, player, stat),
-            self.clock_at(now).for_stat(stat),
-            now,
-        )
+        self.begin(Action::Record(side, player, stat), self.clock_at(now), now)
     }
     pub fn undo(&mut self) -> Result<()> {
         let now = Instant::now();

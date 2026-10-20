@@ -144,7 +144,7 @@ impl Store {
                 tx.pragma_update(None, "application_id", APPLICATION_ID)?;
                 tx.pragma_update(None, "user_version", 1)?;
             }
-            1..=4 if app == APPLICATION_ID => {}
+            1..=5 if app == APPLICATION_ID => {}
             _ => return Err(Error::UnsupportedSchema),
         }
         if version < 2 {
@@ -158,6 +158,10 @@ impl Store {
         if version < 4 {
             tx.execute_batch(include_str!("migration_v4.sql"))?;
             tx.pragma_update(None, "user_version", 4)?;
+        }
+        if version < 5 {
+            tx.execute_batch(include_str!("migration_v5.sql"))?;
+            tx.pragma_update(None, "user_version", 5)?;
         }
         tx.commit()?;
         connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;")?;
@@ -340,6 +344,8 @@ impl Store {
         self.record_with_clock(id, revision, command, side, player, stat, None)
     }
     #[allow(clippy::too_many_arguments)]
+    /// Record with the pre-action live clock. None uses the saved baseline;
+    /// callers operating a running clock must supply its current projection.
     pub fn record_with_clock(
         &mut self,
         id: i64,
@@ -350,6 +356,9 @@ impl Store {
         stat: Stat,
         clock: Option<ClockState>,
     ) -> Result<SavedMatch> {
+        if let Some(clock) = clock {
+            clock.validate()?;
+        }
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -358,7 +367,7 @@ impl Store {
         let tag = stat_key(stat);
         let existing = tx
             .query_row(
-                "SELECT match_id,kind,side,player_id,stat FROM match_events WHERE command_id=?1",
+                "SELECT match_id,kind,side,player_id,stat,game_ms,shot_ms,period,running,shot_running FROM match_events WHERE command_id=?1",
                 [command.to_string()],
                 |r| {
                     Ok((
@@ -367,18 +376,21 @@ impl Store {
                         r.get::<_, Option<String>>(2)?,
                         r.get::<_, Option<i64>>(3)?,
                         r.get::<_, Option<String>>(4)?,
+                        event_clock_row(r, 5)?,
                     ))
                 },
             )
             .optional()?;
         if let Some(e) = existing {
-            if e != (
+            let expected = (
                 id,
                 "record".into(),
                 Some(side.into()),
                 Some(player),
                 Some(tag.into()),
-            ) {
+                e.5,
+            );
+            if e != expected || clock.is_some_and(|stamp| e.5 != Some(stamp)) {
                 return invalid(
                     "This save identifier was already used for a different action. Reopen the match.",
                 );
@@ -393,9 +405,10 @@ impl Store {
         if current.game.player(parse_side(side)?, player).is_none() {
             return invalid("Select a player from this match's roster.");
         }
-        tx.execute("INSERT INTO match_events(match_id,command_id,kind,side,player_id,stat) VALUES (?1,?2,'record',?3,?4,?5)",params![id,command.to_string(),side,player,tag])?;
+        let stamp = clock.unwrap_or(current.clock);
+        tx.execute("INSERT INTO match_events(match_id,command_id,kind,side,player_id,stat,game_ms,shot_ms,period,running,shot_running) VALUES (?1,?2,'record',?3,?4,?5,?6,?7,?8,?9,?10)",params![id,command.to_string(),side,player,tag,stamp.game_ms as i64,stamp.shot_ms as i64,stamp.period,stamp.running,stamp.shot_running])?;
         if let Some(clock) = clock {
-            write_clock(&tx, id, clock)?;
+            write_clock(&tx, id, clock.for_stat(stat))?;
         }
         tx.execute("UPDATE matches SET revision=revision+1 WHERE id=?1", [id])?;
         let saved = load(&tx, id)?;
@@ -569,21 +582,26 @@ fn load(db: &Connection, id: i64) -> Result<SavedMatch> {
             players: load_players(db, id, "away")?,
         },
     ];
-    let mut stmt=db.prepare("SELECT e.side,e.player_id,e.stat FROM match_events e WHERE e.match_id=?1 AND e.kind='record' AND NOT EXISTS(SELECT 1 FROM match_events u WHERE u.target_id=e.id) ORDER BY e.id")?;
+    let mut stmt=db.prepare("SELECT e.side,e.player_id,e.stat,e.game_ms,e.shot_ms,e.period,e.running,e.shot_running FROM match_events e WHERE e.match_id=?1 AND e.kind='record' AND NOT EXISTS(SELECT 1 FROM match_events u WHERE u.target_id=e.id) ORDER BY e.id")?;
     let rows = stmt.query_map([id], |r| {
         Ok((
             r.get::<_, String>(0)?,
             r.get::<_, i64>(1)?,
             r.get::<_, String>(2)?,
+            event_clock_row(r, 3)?,
         ))
     })?;
     let mut plays = Vec::new();
     for row in rows {
-        let (side, player_id, stat) = row?;
+        let (side, player_id, stat, clock) = row?;
+        if let Some(stamp) = clock {
+            stamp.validate()?;
+        }
         plays.push(Play {
             side: parse_side(&side)?,
             player_id,
             stat: parse_stat(&stat)?,
+            clock,
         });
     }
     let clock = db.query_row(
@@ -670,6 +688,19 @@ fn parse_stat(value: &str) -> Result<Stat> {
         "disqualifying" => Ok(Stat::Disqualifying),
         "warning" => Ok(Stat::Warning),
         _ => invalid("Unsupported stat in saved match. Use a compatible application version."),
+    }
+}
+
+fn event_clock_row(r: &rusqlite::Row<'_>, offset: usize) -> rusqlite::Result<Option<ClockState>> {
+    let fields = (offset..offset + 5)
+        .map(|index| r.get::<_, Option<i64>>(index))
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    if fields.iter().all(Option::is_none) {
+        Ok(None)
+    } else if fields.iter().all(Option::is_some) {
+        clock_row(r, offset).map(Some)
+    } else {
+        Err(rusqlite::Error::InvalidQuery)
     }
 }
 

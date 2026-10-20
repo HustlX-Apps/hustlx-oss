@@ -6,6 +6,8 @@ Rust and Iced render the interface. SQLite stores reusable teams/players, member
 
 Game and shot clocks use monotonic countdowns, transactional commands and paused restart recovery. Player profiles include optional jerseys and positions; supported v2 shortcuts work on Game Day. Starting lineups, confirmed substitutions and saved lineup history are available. Basketball timeouts and completion, full box scores, exports, and installers remain planned. The six set/rally sports have a separate local scoring, completion and reopened-result workflow. New matches start with empty courts and require explicit starter selection to put players on court; this is advisory and does not block other game-day actions. This is not ready to keep a real game's complete official record.
 
+Stats now retain pre-action period/game/shot context across retry and reopen. The native feed shows saved timing; legacy rows explicitly show Time not recorded. See [event timing evidence](evidence/clock-stamped-events/README.md).
+
 ## Prerequisites
 
 Install stable Rust using [rustup](https://rustup.rs/). On macOS install Xcode Command Line Tools. On Windows use the MSVC Rust target and Visual Studio C++ build tools and Windows SDK. SQLite is built from bundled source with the application.
@@ -68,7 +70,7 @@ Integration tests use temporary databases for unknown identities, invalid dates,
 ## Structure
 
 - `src/lib.rs`: renderer-independent match/stat projections. Synthetic defaults support tests only.
-- `src/schema.sql`, `src/storage.rs`: schema version 4 with `src/migration_v2.sql`, `src/migration_v3.sql` and `src/migration_v4.sql`, catalog operations, roster snapshots, transactional event commands.
+- `src/schema.sql`, `src/storage.rs`: schema version 5 with `src/migration_v2.sql` through `src/migration_v5.sql`, catalog operations, roster snapshots, transactional event commands and nullable pre-action timing.
 - `src/session.rs`: commit-before-display state and pending retries.
 - `src/brand.rs`: embedded wordmarks, Inter/Exo font roles, and light/dark palettes. See [branding](branding.md).
 - `src/main.rs`, `src/ui.rs`, `src/library_ui.rs`, `src/clock_ui.rs`, `src/lineup_ui.rs`: native entry point, Game Day console, and library forms.
@@ -76,11 +78,14 @@ Integration tests use temporary databases for unknown identities, invalid dates,
 - `src/clock.rs`, `src/profile.rs`, `src/hotkeys.rs`: renderer-independent clocks, player details, and shortcut routing.
 - `src/native_quit.rs`: macOS AppKit Quit delegates to the durable close path; Windows uses Iced close requests. Recheck the native Quit journey after Iced/winit upgrades.
 - `tests/preview.rs`, `tests/storage.rs`, `tests/clocks.rs`, `tests/desktop.rs`, `tests/hotkeys.rs`, `tests/lineups.rs`: domain, persistence, recovery and shortcut tests.
+- `tests/clock_events.rs`: pre-action timing, exact milliseconds, clock effects, legacy migration, corrections/period changes, zero clocks, undo, idempotency and failed-save retry.
 - `docs/references/`: original web screenshots, separate from native evidence.
 
 ## Clock smoke check
 
 Use [clocks and shortcuts](clocks-hotkeys.md). Check Space, 24/14 resets, independent shot pause, time corrections, both expiry paths, period advance, jersey/side selection and undo. Close while running with both the window close button and macOS Command-Q, reopen paused, and confirm no closed interval was deducted. Inject a failing clock write only into an isolated test database; confirm Quit stays open and Retry saves once before closing. Sleep/discontinuity and abrupt recovery have deterministic session tests; physical sleep/power-loss tests remain a release gate.
+
+For event timing, record a made field goal with a shot reading other than 24. Its feed row must keep the pre-reset reading while the current shot clock resets to 24. Advance the period, quit and restart; the old row must retain its original period/time. Upgrade a disposable schema 3 library and check that its old events show Time not recorded. Inspect both themes at the minimum window size; do not test upgrades on an operator's only library.
 
 ## Lineup smoke check
 
