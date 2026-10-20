@@ -16,8 +16,10 @@ Execution uses an isolated `codex/oss-multi-sport` branch from `origin/develop`.
 - [x] Persistence: `src/migration_v4.sql`, `src/sport_storage.rs`, `src/storage.rs`, `src/session.rs`, UUID checks in `src/lineup_storage.rs`, `tests/sport_storage.rs`. Add immutable settings, named side snapshots, transactional event append/undo, expected revisions, exact retries, v3 migration, failed-write rollback and reopen tests. Keep basketball creation compatible.
 - [x] Native UI: `src/sport_ui.rs`, `src/library_ui.rs`, `src/ui.rs`, `src/clock_ui.rs`, focused desktop tests. Add sport/rules/side setup and sport console routing. Expose score, server, unit results, correction history, finish and undo. Disable basketball-only actions at both session and UI boundaries.
 - [x] Integration: run all six create/score/undo/finish/reopen journeys, legacy basketball regression, retry/collision/rollback cases and smallest-window rendering in both themes.
-- [ ] Documentation and handoff: update product brief, README, architecture, storage, development, roadmap and sport guide. Record supported settings and deferred features precisely. Commit, push and open PR to develop with required evidence headings.
+- [x] Documentation and handoff: update product brief, README, architecture, storage, development, roadmap and sport guide. Record supported settings and deferred features precisely. Commit, push and open PR to develop with required evidence headings.
 
 ## Verification
 
 Run `/Users/jaylupos/.cargo/bin/cargo fmt --all -- --check`, `cargo test --locked --workspace --all-targets`, `cargo clippy --locked --workspace --all-targets -- -D warnings` and `cargo build --locked` from this worktree (use the absolute Cargo path where shell PATH omits it). Use `cargo test --locked --no-default-features` for fast domain/persistence iterations. Native smoke uses an isolated `HUSTLX_OSS_DATA_DIR`, never the operator's library. Preserve before/after screenshots. Run the umbrella merge flagger with the actual PR body; its generic verifier has no Rust lane and cannot replace Cargo checks.
+
+Runtime handoff: [PR #5](https://github.com/HustlX-Apps/hustlx-oss/pull/5). Local evidence is in [the native verification record](../evidence/multi-sport/README.md). Publishing and cross-platform native certification are separate release actions.

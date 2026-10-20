@@ -29,6 +29,7 @@ The first visual pass found a basketball-only Hotkeys button still shown on the 
 - `cargo clippy --locked --workspace --all-targets -- -D warnings`: passed.
 - `cargo build --locked`: passed on macOS arm64.
 - `git diff --check`: passed.
+- Merge flagger: no P0 blocker; `FLAG` for scoring and status keyword risks. The tests above provide the scoring, transition and persistence evidence; merge remains review-owned.
 - Umbrella `verify-changed.sh --strict origin/develop`: exit 0, no mapped Rust lane. Cargo supplies the runtime proof.
 
 The engine suite covers volleyball deuce/decider, pickleball side-out and rally scoring, opening doubles service and odd-score service recovery, table-tennis service cadence/deuce/doubles decider/manual corrections, badminton cap and doubles positions, tennis advantage/no-ad/tiebreak, padel Star Point/match tiebreak and deterministic replay before every sport's final point.
