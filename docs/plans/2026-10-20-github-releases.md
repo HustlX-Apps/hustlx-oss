@@ -8,7 +8,9 @@ Alternatives: release-on-every-merge would publish unfinished development work; 
 
 Repo set: hustlx-oss and umbrella .agents/docs. Execution: Rust xtask, Python standard library, GitHub Actions/CLI. Verification: version tests, isolated asset fixtures and mocked GitHub mutations, Cargo workspace tests/Clippy/format, actionlint, native PR checks, skill validation, AgentSync, shared verifier and merge flagger. Documentation: local release guide, shared workflow routing and skill registry. No basketball or persistence behavior changes.
 
-- [ ] Add failing version bump/preview and release safety tests, then implement the commands.
-- [ ] Add native build/artifact workflow and gated publishing job; verify PR packages without publishing.
-- [ ] Add the shared release skill and slash command through canonical AgentSync configuration.
-- [ ] Update guides and evidence, run required checks, and open PRs targeting develop. No release dispatch with publishing enabled, tags, or GitHub Release creation.
+- [x] Add failing version bump/preview and release safety tests, then implement the commands.
+- [x] Add native build/artifact workflow and gated publishing job; run PR package verification without publishing.
+- [x] Add the shared release skill and slash command through canonical AgentSync configuration.
+- [x] Update guides and evidence, run required checks, and open PRs targeting develop. No release dispatch with publishing enabled, tags, or GitHub Release creation.
+
+Runtime PR #3 records the native build/artifact results. Shared skill/command: HustlX-Apps/apps PR #762. Release publication and manual platform certification are intentionally outside this implementation handoff.
