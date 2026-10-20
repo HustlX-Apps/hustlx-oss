@@ -6,6 +6,8 @@ Start with the [product brief](docs/product-brief.md), [architecture proposal](d
 
 Use a small feature branch and a pull request. Target the `develop` integration branch by default. Do not push runtime changes directly to `main` or `develop`. Include the behavior change, documentation impact, and actual verification results in each PR.
 
+CI/CD is disabled to save cost. Run `bash scripts/check.sh` on macOS or `./scripts/check.ps1` in Windows PowerShell before handoff, and record the host and results. Do not add hosted CI, dispatch remote builds or automate releases unless the user explicitly asks to resume CI/CD. Missing hosted status checks do not waive local verification. See [notes](docs/notes.md).
+
 Keep game operation offline, preserve historical identities, and never introduce a league, account, subscription, or network requirement into the local game workflow. Test meaningful state transitions and failure paths. Record the commands actually run; do not claim platform support from an untested build target.
 
 Do not copy private HustlX source, credentials, match records, or unlicensed assets into this repository. Use synthetic data for examples and screenshots. Never commit local databases, exports containing personal data, `.env` files, access tokens, or signing credentials.

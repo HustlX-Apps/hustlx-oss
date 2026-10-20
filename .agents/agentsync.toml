@@ -1,0 +1,13 @@
+source_dir = "."
+
+[gitignore]
+enabled = false
+
+[agents.codex]
+enabled = true
+description = "Repository agent instructions"
+
+[agents.codex.targets.instructions]
+source = "AGENTS.md"
+destination = "AGENTS.md"
+type = "symlink"

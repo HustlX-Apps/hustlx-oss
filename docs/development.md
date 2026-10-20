@@ -39,20 +39,27 @@ Do not use a real operator library for destructive tests. [Storage guidance](sto
 
 ## Verify
 
+CI/CD is paused to save cost. GitHub Actions is disabled and hosted workflows are removed. Use the local checker from the repository root:
+
 ```sh
-cargo fmt --all -- --check
-cargo test --locked --workspace --all-targets
-cargo clippy --locked --workspace --all-targets -- -D warnings
-cargo build --locked
+bash scripts/check.sh
 ```
 
-The domain and persistence tests can run without the renderer:
+Windows PowerShell:
+
+```powershell
+./scripts/check.ps1
+```
+
+Install stable Rust with rustfmt and Clippy, plus Python 3.9+ (`python3` on macOS, `python` on Windows). The checker stops at the first failure and runs formatting, workspace/all-target tests, Clippy with warnings denied, Python release safety tests, a native debug build and a packaging dry-run. It never starts hosted jobs or publishes. Include the host OS and actual results in the PR.
+
+The domain and persistence tests can also run without the renderer:
 
 ```sh
 cargo test --locked --no-default-features
 ```
 
-The shared umbrella verifier has no owning Rust lane. Its summary does not substitute for Cargo checks. `.github/workflows/rust.yml` runs formatting, tests, Clippy, and build on Windows and macOS. CI does not launch the graphical app. See [current evidence](evidence/native-clocks/README.md).
+The shared umbrella verifier has no owning Rust lane; its summary does not substitute for this local checker. Manual graphical and platform release evidence remains required. Do not restore CI/CD without explicit user direction. See [the decision](notes.md) and [current native evidence](evidence/native-clocks/README.md).
 
 ## Native smoke check
 
@@ -93,7 +100,7 @@ Create an isolated match with seven players per side. Save five starters per sid
 
 ## Versioned packaging commands
 
-See [desktop releases](releases.md). `cargo xtask version --bump patch --dry-run` previews the next version; omit `--dry-run` to update the app manifest/lock. Exact versions and minor/major bumps are also supported. `cargo xtask release --version VERSION --dry-run` previews local packaging; omit `--dry-run` to build a native ZIP/checksum. Cargo commands do not publish. The separate Python command dispatches GitHub native builds and requires explicit `--publish --ref main` for GitHub Releases. Run `python3 -m unittest discover -s scripts -p test_github_release.py -v` and actionlint when changing the release tooling. Relevant PRs build all three optimized packages without publishing; graphical launch and upgrade tests remain manual.
+See [desktop releases](releases.md). `cargo xtask version --bump patch --dry-run` previews the next version; omit `--dry-run` to update the app manifest/lock. Exact versions and minor/major bumps are also supported. `cargo xtask release --version VERSION --dry-run` previews local packaging; omit `--dry-run` to build a native ZIP/checksum. Cargo commands do not publish. Hosted build dispatch and automated publication are paused. Run the local checker after release-tooling changes; graphical launch and upgrade tests remain manual. Historical GitHub automation helpers do not authorize remote runs.
 
 ## Multi-sport verification
 

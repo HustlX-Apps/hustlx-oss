@@ -52,6 +52,8 @@ This is the existing web console rendered with sample data, not the desktop appl
 
 Install Rust with [rustup](https://rustup.rs/), then run `cargo run --locked`. SQLite is bundled; no database server is needed. See [development and verification](docs/development.md).
 
+CI/CD is paused to save cost. GitHub Actions is disabled; all checks run locally with `bash scripts/check.sh` on macOS or `./scripts/check.ps1` in Windows PowerShell. Hosted builds and automated releases require an explicit decision to resume them. See [the local-only decision](docs/notes.md).
+
 ## Documentation
 
 - [Branding](docs/branding.md): wordmarks, typography, palettes, and asset provenance.
@@ -59,7 +61,7 @@ Install Rust with [rustup](https://rustup.rs/), then run `cargo run --locked`. S
 - [Architecture](docs/architecture-proposal.md): implemented Rust/SQLite/clock boundaries and proposed sync.
 - [Lineups and substitutions](docs/lineups-substitutions.md): starting players, swaps, history and save behavior.
 - [Local storage](docs/storage.md): schema, data paths, snapshots, and failure handling.
-- [Versions and GitHub Releases](docs/releases.md): version preparation, Windows/macOS builds, explicit publishing and signing limits.
+- [Versions and local packages](docs/releases.md): local version preparation, Windows/macOS packaging and signing limits.
 - [Roadmap](docs/roadmap.md): implementation slices and acceptance evidence.
 - [UI reference](docs/references/README.md): capture provenance and visual parity notes.
 - [Contributing](CONTRIBUTING.md): small changes, documentation, and verification expectations.
