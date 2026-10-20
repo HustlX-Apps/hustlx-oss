@@ -21,7 +21,7 @@ SQLite is bundled with the Rust executable. Normal data locations are:
 
 The application creates the directory on first launch and starts with an empty catalog. The database and its journal sidecars belong to the operator and must never be committed to Git. No data is sent to HustlX. There is no cloud backup or database encryption in this slice.
 
-## Schema version 3
+## Schema version 4
 
 | Table | Responsibility |
 | --- | --- |
@@ -34,7 +34,7 @@ The application creates the directory on first launch and starts with an empty c
 | `clock_commands` | UUID receipts for idempotent clock commands |
 | `match_events` | Append-only record/undo commands, UUIDs, actors, stats, and undo targets |
 
-Foreign keys scope events to a match roster and undo targets to their match. SQLite application ID `0x48584f53` identifies this app; `user_version=3` identifies the schema. First schema creation and the explicit version 1 to 2 and 2 to 3 migrations are transactional. Matches upgrading from schema 1 receive period 1, 10:00/24, both paused, because version 1 stored no clock truth. The migration adds profile/snapshot fields without rewriting events or historical jerseys. This version refuses newer/foreign schemas and existing unrecognized tables. It does not rewrite, downgrade, or replace them. The migration is forward-only. Before upgrading, copy the closed library directory. Schema 2 to 3 adds lineup history without modifying existing court flags/order, clocks or stats. Older matches have no confirmed starter selection until the operator saves it; the app never infers starters from the current lineup. An older binary refuses schema 3; rollback requires that pre-upgrade copy in a separate directory.
+Foreign keys scope events to a match roster and undo targets to their match. SQLite application ID `0x48584f53` identifies this app; `user_version=4` identifies the schema. First schema creation and the explicit version 1 to 2 and 2 to 3 migrations are transactional. Matches upgrading from schema 1 receive period 1, 10:00/24, both paused, because version 1 stored no clock truth. The migration adds profile/snapshot fields without rewriting events or historical jerseys. This version refuses newer/foreign schemas and existing unrecognized tables. It does not rewrite, downgrade, or replace them. The migration is forward-only. Before upgrading, copy the closed library directory. Schema 2 to 3 adds lineup history without modifying existing court flags/order, clocks or stats. Older matches have no confirmed starter selection until the operator saves it; the app never infers starters from the current lineup. An older binary refuses schema 4; rollback requires that pre-upgrade copy in a separate directory.
 
 ## Save and retry behavior
 
@@ -49,3 +49,9 @@ An unavailable or incompatible library shows an error and retry control. It neve
 ## Preservation and planned backups
 
 There is no in-app backup/restore or statistics export yet. For a manual safety copy, close every app instance using the library, then copy the entire data directory to a safe location. Preserve any `-wal` and `-shm` sidecars along with the database; copying only the main file while it is open can omit committed data. Do not overwrite your only copy while troubleshooting. Automated backup integrity and restore verification remain future work.
+
+## Sport match events
+
+Schema 4 adds `matches.sport` with a basketball default, `sport_matches` with a stable local UUID and immutable versioned rules JSON, and `sport_events` with versioned record/undo commands. Existing basketball history, clocks, snapshots and lineup receipts are preserved. Named sides get distinct local IDs even when their labels match.
+
+`src/sport_storage.rs` replays active commands through the pure scoring engine. A transaction appends the command and increments the shared match revision before returning the new projection. Undo refers to the latest active command and restores the complete score, service and completion state through replay. UUID checks cover sport, statistic, clock and lineup command families. Future rule or payload versions fail visibly instead of silently interpreting unknown data. There is no schema downgrade; keep the closed pre-upgrade library copy.

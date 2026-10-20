@@ -4,7 +4,7 @@
 
 Rust and Iced render the interface. SQLite stores reusable teams/players, memberships, named and dated matches, roster snapshots, and durable stat/undo events. Startup opens Matches with an empty library on first use. No sample records are inserted.
 
-Game and shot clocks use monotonic countdowns, transactional commands and paused restart recovery. Player profiles include optional jerseys and positions; supported v2 shortcuts work on Game Day. Starting lineups, confirmed substitutions and saved lineup history are available. Timeouts, completion, full box scores, exports, and installers remain planned. New matches start with empty courts and require explicit starter selection to put players on court; this is advisory and does not block other game-day actions. This is not ready to keep a real game's complete official record.
+Game and shot clocks use monotonic countdowns, transactional commands and paused restart recovery. Player profiles include optional jerseys and positions; supported v2 shortcuts work on Game Day. Starting lineups, confirmed substitutions and saved lineup history are available. Basketball timeouts and completion, full box scores, exports, and installers remain planned. The six set/rally sports have a separate local scoring, completion and reopened-result workflow. New matches start with empty courts and require explicit starter selection to put players on court; this is advisory and does not block other game-day actions. This is not ready to keep a real game's complete official record.
 
 ## Prerequisites
 
@@ -68,7 +68,7 @@ Integration tests use temporary databases for unknown identities, invalid dates,
 ## Structure
 
 - `src/lib.rs`: renderer-independent match/stat projections. Synthetic defaults support tests only.
-- `src/schema.sql`, `src/storage.rs`: schema version 3 with `src/migration_v2.sql` and `src/migration_v3.sql`, catalog operations, roster snapshots, transactional event commands.
+- `src/schema.sql`, `src/storage.rs`: schema version 4 with `src/migration_v2.sql`, `src/migration_v3.sql` and `src/migration_v4.sql`, catalog operations, roster snapshots, transactional event commands.
 - `src/session.rs`: commit-before-display state and pending retries.
 - `src/brand.rs`: embedded wordmarks, Inter/Exo font roles, and light/dark palettes. See [branding](branding.md).
 - `src/main.rs`, `src/ui.rs`, `src/library_ui.rs`, `src/clock_ui.rs`, `src/lineup_ui.rs`: native entry point, Game Day console, and library forms.
@@ -89,3 +89,7 @@ Create an isolated match with seven players per side. Save five starters per sid
 ## Versioned packaging commands
 
 See [desktop releases](releases.md). `cargo xtask version --bump patch --dry-run` previews the next version; omit `--dry-run` to update the app manifest/lock. Exact versions and minor/major bumps are also supported. `cargo xtask release --version VERSION --dry-run` previews local packaging; omit `--dry-run` to build a native ZIP/checksum. Cargo commands do not publish. The separate Python command dispatches GitHub native builds and requires explicit `--publish --ref main` for GitHub Releases. Run `python3 -m unittest discover -s scripts -p test_github_release.py -v` and actionlint when changing the release tooling. Relevant PRs build all three optimized packages without publishing; graphical launch and upgrade tests remain manual.
+
+## Multi-sport verification
+
+`tests/sports.rs` covers sport scoring and service boundaries; `tests/sport_storage.rs` covers durable journeys, replay corrections, revision/UUID integrity, migration and failed-write rollback. Native UI routing tests cover creation and basketball control isolation. Use the complete Cargo checks above before handoff. Exercise setup, scoring, undo, completion and restart in an isolated library and inspect both themes at 1100x760. The hosted API/Nuxt harness is not a substitute for these Rust tests and is not required when those repositories remain unchanged.

@@ -12,10 +12,10 @@ Execution uses an isolated `codex/oss-multi-sport` branch from `origin/develop`.
 
 ## Implementation checklist
 
-- [ ] Pure engine: `src/sport.rs`, `tests/sports.rs`, minimal library exports and serialization dependencies. Write boundary tests first, then implement sport-specific scoring/service transitions, valid configurable defaults, completion and serializable rules/commands. Cover deuce, cap, side-out, tiebreak, unit transitions and replay.
-- [ ] Persistence: `src/migration_v4.sql`, `src/sport_storage.rs`, `src/storage.rs`, `src/session.rs`, UUID checks in `src/lineup_storage.rs`, `tests/sport_storage.rs`. Add immutable settings, named side snapshots, transactional event append/undo, expected revisions, exact retries, v3 migration, failed-write rollback and reopen tests. Keep basketball creation compatible.
-- [ ] Native UI: `src/sport_ui.rs`, `src/library_ui.rs`, `src/ui.rs`, `src/clock_ui.rs`, focused desktop tests. Add sport/rules/side setup and sport console routing. Expose score, server, unit results, correction history, finish and undo. Disable basketball-only actions at both session and UI boundaries.
-- [ ] Integration: run all six create/score/undo/finish/reopen journeys, legacy basketball regression, retry/collision/rollback cases and smallest-window rendering in both themes.
+- [x] Pure engine: `src/sport.rs`, `tests/sports.rs`, minimal library exports and serialization dependencies. Write boundary tests first, then implement sport-specific scoring/service transitions, valid configurable defaults, completion and serializable rules/commands. Cover deuce, cap, side-out, tiebreak, unit transitions and replay.
+- [x] Persistence: `src/migration_v4.sql`, `src/sport_storage.rs`, `src/storage.rs`, `src/session.rs`, UUID checks in `src/lineup_storage.rs`, `tests/sport_storage.rs`. Add immutable settings, named side snapshots, transactional event append/undo, expected revisions, exact retries, v3 migration, failed-write rollback and reopen tests. Keep basketball creation compatible.
+- [x] Native UI: `src/sport_ui.rs`, `src/library_ui.rs`, `src/ui.rs`, `src/clock_ui.rs`, focused desktop tests. Add sport/rules/side setup and sport console routing. Expose score, server, unit results, correction history, finish and undo. Disable basketball-only actions at both session and UI boundaries.
+- [x] Integration: run all six create/score/undo/finish/reopen journeys, legacy basketball regression, retry/collision/rollback cases and smallest-window rendering in both themes.
 - [ ] Documentation and handoff: update product brief, README, architecture, storage, development, roadmap and sport guide. Record supported settings and deferred features precisely. Commit, push and open PR to develop with required evidence headings.
 
 ## Verification

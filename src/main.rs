@@ -6,7 +6,7 @@ mod ui;
 
 fn main() -> iced::Result {
     iced::application(ui::App::default, ui::App::update, ui::App::view)
-        .title("HustlX OSS | Basketball Game Day")
+        .title("HustlX OSS | Offline Game Day")
         .font(include_bytes!("../assets/fonts/Inter-Regular.ttf").as_slice())
         .font(include_bytes!("../assets/fonts/Inter-SemiBold.ttf").as_slice())
         .font(include_bytes!("../assets/fonts/Inter-Bold.ttf").as_slice())

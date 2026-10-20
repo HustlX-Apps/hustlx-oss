@@ -71,6 +71,7 @@ impl Store {
             return invalid("This save identifier already belongs to a stat command.");
         }
         let current = load(&tx, id)?;
+        basketball_only(&current)?;
         if current.summary.revision != revision {
             return Err(Error::Conflict);
         }

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 publish = false
-description = "Offline-first basketball Game Day desktop application"
+description = "Offline-first multi-sport Game Day desktop application"
 repository = "https://github.com/HustlX-Apps/hustlx-oss"
 
 [features]
@@ -13,6 +13,8 @@ desktop = ["dep:iced"]
 
 [dependencies]
 chrono = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 directories = "6"
 iced = { version = "0.14", optional = true, default-features = false, features = ["wgpu", "tiny-skia", "crisp", "thread-pool", "svg", "tokio"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }

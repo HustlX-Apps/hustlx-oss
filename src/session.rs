@@ -3,7 +3,8 @@ use crate::{
     Side, Stat,
     clock::{ClockCommand, ClockState},
     lineup::LineupKind,
-    storage::{Error, MatchDraft, Result, SavedMatch, Store},
+    sport::{Command as SportCommand, Sport},
+    storage::{Error, MatchDraft, Result, SavedMatch, SportMatchDraft, Store},
 };
 use std::time::{Duration, Instant, SystemTime};
 use uuid::Uuid;
@@ -11,6 +12,8 @@ use uuid::Uuid;
 enum Action {
     Record(Side, i64, Stat),
     Undo,
+    Sport(SportCommand),
+    UndoSport,
     Clock,
     Lineup(Side, LineupKind, Vec<i64>),
 }
@@ -99,6 +102,37 @@ impl Session {
         self.accept(saved, Instant::now());
         Ok(())
     }
+    pub fn create_sport(&mut self, draft: &SportMatchDraft) -> Result<()> {
+        self.pause_for_close_at(Instant::now())?;
+        let saved = self.store.create_sport_match(draft)?;
+        self.accept(saved, Instant::now());
+        Ok(())
+    }
+    pub fn sport_command(&mut self, command: SportCommand) -> Result<()> {
+        let mut state = self
+            .active
+            .as_ref()
+            .and_then(|a| a.sport_state.clone())
+            .ok_or_else(|| Error::Validation("Open a volleyball or racquet match first.".into()))?;
+        state
+            .apply(command)
+            .map_err(|e| Error::Validation(e.to_string()))?;
+        let now = Instant::now();
+        self.begin(Action::Sport(command), self.clock_at(now), now)
+    }
+    fn require_basketball(&self) -> Result<()> {
+        if self
+            .active
+            .as_ref()
+            .is_some_and(|a| a.summary.sport != Sport::Basketball)
+        {
+            return Err(Error::Validation(
+                "Use this sport's score controls. Basketball commands do not apply to this match."
+                    .into(),
+            ));
+        }
+        Ok(())
+    }
     pub fn select(&mut self, side: Side, player: i64) {
         if self.pending.is_none()
             && let Some(a) = &mut self.active
@@ -115,6 +149,7 @@ impl Session {
         self.record_at(stat, Instant::now())
     }
     pub fn record_at(&mut self, stat: Stat, now: Instant) -> Result<()> {
+        self.require_basketball()?;
         let Some((side, player)) = self.active.as_ref().and_then(|a| a.game.selected) else {
             return Err(Error::Validation("Select a player first.".into()));
         };
@@ -126,7 +161,23 @@ impl Session {
     }
     pub fn undo(&mut self) -> Result<()> {
         let now = Instant::now();
-        self.begin(Action::Undo, self.clock_at(now), now)
+        let action = if let Some(active) = &self.active
+            && active.sport_state.is_some()
+        {
+            if !active
+                .sport_history
+                .iter()
+                .any(|e| e.command.is_some() && !e.undone)
+            {
+                return Err(Error::Validation(
+                    "There is no sport action to undo.".into(),
+                ));
+            }
+            Action::UndoSport
+        } else {
+            Action::Undo
+        };
+        self.begin(action, self.clock_at(now), now)
     }
     pub fn save_lineup_at(
         &mut self,
@@ -135,6 +186,7 @@ impl Session {
         court: Vec<i64>,
         now: Instant,
     ) -> Result<()> {
+        self.require_basketball()?;
         let game = &self
             .active
             .as_ref()
@@ -144,6 +196,7 @@ impl Session {
         self.begin(Action::Lineup(side, kind, court), self.clock_at(now), now)
     }
     pub fn command_at(&mut self, command: ClockCommand, now: Instant) -> Result<()> {
+        self.require_basketball()?;
         let clock = self.clock_at(now).command(command)?;
         self.begin(Action::Clock, clock, now)
     }
@@ -231,6 +284,10 @@ impl Session {
             .clone()
             .ok_or_else(|| Error::Validation("There is no pending save.".into()))?;
         let saved = match &p.action {
+            Action::Sport(command) => self
+                .store
+                .record_sport(p.match_id, p.revision, p.id, *command)?,
+            Action::UndoSport => self.store.undo_sport(p.match_id, p.revision, p.id)?,
             Action::Record(side, player, stat) => self.store.record_with_clock(
                 p.match_id,
                 p.revision,

@@ -3,6 +3,7 @@ use crate::{
     Game, Play, Player, Side, Stat, Team,
     clock::ClockState,
     profile::{self, PlayerDetails, Position},
+    sport::{Sport, State},
 };
 use chrono::NaiveDate;
 use directories::ProjectDirs;
@@ -15,6 +16,9 @@ use std::{
 use uuid::Uuid;
 #[path = "lineup_storage.rs"]
 mod lineups;
+#[path = "sport_storage.rs"]
+mod sports;
+pub use sports::{SportEvent, SportMatchDraft};
 const APPLICATION_ID: i64 = 0x48584f53;
 
 #[derive(Debug)]
@@ -77,6 +81,7 @@ pub struct MatchDraft {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchSummary {
+    pub sport: Sport,
     pub id: i64,
     pub name: String,
     pub date: String,
@@ -87,6 +92,8 @@ pub struct MatchSummary {
 }
 #[derive(Debug, Clone)]
 pub struct SavedMatch {
+    pub sport_state: Option<State>,
+    pub sport_history: Vec<SportEvent>,
     pub summary: MatchSummary,
     pub game: Game,
     pub clock: ClockState,
@@ -137,7 +144,7 @@ impl Store {
                 tx.pragma_update(None, "application_id", APPLICATION_ID)?;
                 tx.pragma_update(None, "user_version", 1)?;
             }
-            1..=3 if app == APPLICATION_ID => {}
+            1..=4 if app == APPLICATION_ID => {}
             _ => return Err(Error::UnsupportedSchema),
         }
         if version < 2 {
@@ -147,6 +154,10 @@ impl Store {
         if version < 3 {
             tx.execute_batch(include_str!("migration_v3.sql"))?;
             tx.pragma_update(None, "user_version", 3)?;
+        }
+        if version < 4 {
+            tx.execute_batch(include_str!("migration_v4.sql"))?;
+            tx.pragma_update(None, "user_version", 4)?;
         }
         tx.commit()?;
         connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;")?;
@@ -305,7 +316,7 @@ impl Store {
         Ok(saved)
     }
     pub fn matches(&self) -> Result<Vec<MatchSummary>> {
-        let mut stmt=self.connection.prepare("SELECT id,name,date,venue,home_name,away_name,revision FROM matches ORDER BY date DESC,id DESC")?;
+        let mut stmt=self.connection.prepare("SELECT id,name,date,venue,home_name,away_name,revision,sport FROM matches ORDER BY date DESC,id DESC")?;
         Ok(stmt
             .query_map([], summary)?
             .collect::<rusqlite::Result<_>>()?)
@@ -375,6 +386,7 @@ impl Store {
             return load(&tx, id);
         }
         let current = load(&tx, id)?;
+        basketball_only(&current)?;
         if current.summary.revision != revision {
             return Err(Error::Conflict);
         }
@@ -420,6 +432,7 @@ impl Store {
             return load(&tx, id);
         }
         let current = load(&tx, id)?;
+        basketball_only(&current)?;
         if current.summary.revision != revision {
             return Err(Error::Conflict);
         }
@@ -451,6 +464,7 @@ impl Store {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         lineups::command_available(&tx, command)?;
+        sports::command_available(&tx, command)?;
         let existing=tx.query_row("SELECT match_id,game_ms,shot_ms,period,running,shot_running FROM clock_commands WHERE command_id=?1",[command.to_string()],|r|Ok((r.get::<_,i64>(0)?,clock_row(r,1)?))).optional()?;
         if let Some(existing) = existing {
             if existing != (id, clock) {
@@ -467,6 +481,7 @@ impl Store {
             return invalid("This save identifier already belongs to a stat command.");
         }
         let current = load(&tx, id)?;
+        basketball_only(&current)?;
         if current.summary.revision != revision {
             return Err(Error::Conflict);
         }
@@ -533,11 +548,14 @@ fn summary(r: &rusqlite::Row<'_>) -> rusqlite::Result<MatchSummary> {
         home_name: r.get(4)?,
         away_name: r.get(5)?,
         revision: r.get(6)?,
+        sport: sports::parse_sport(r.get::<_, String>(7)?.as_str()).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(7, rusqlite::types::Type::Text, Box::new(e))
+        })?,
     })
 }
 fn load(db: &Connection, id: i64) -> Result<SavedMatch> {
     let summary = db.query_row(
-        "SELECT id,name,date,venue,home_name,away_name,revision FROM matches WHERE id=?1",
+        "SELECT id,name,date,venue,home_name,away_name,revision,sport FROM matches WHERE id=?1",
         [id],
         summary,
     )?;
@@ -574,7 +592,10 @@ fn load(db: &Connection, id: i64) -> Result<SavedMatch> {
         |r| clock_row(r, 0),
     )?;
     clock.validate()?;
+    let (sport_state, sport_history) = sports::projection(db, id, summary.sport)?;
     Ok(SavedMatch {
+        sport_state,
+        sport_history,
         summary,
         clock,
         lineups: lineups::history(db, id)?,
@@ -667,6 +688,7 @@ fn write_clock(db: &Connection, id: i64, clock: ClockState) -> Result<()> {
 }
 fn event_command_available(db: &Connection, command: Uuid) -> Result<()> {
     lineups::command_available(db, command)?;
+    sports::command_available(db, command)?;
     let used: bool = db.query_row(
         "SELECT EXISTS(SELECT 1 FROM clock_commands WHERE command_id=?1)",
         [command.to_string()],
@@ -674,6 +696,15 @@ fn event_command_available(db: &Connection, command: Uuid) -> Result<()> {
     )?;
     if used {
         return invalid("This save identifier already belongs to a clock command.");
+    }
+    Ok(())
+}
+
+fn basketball_only(saved: &SavedMatch) -> Result<()> {
+    if saved.summary.sport != Sport::Basketball {
+        return invalid(
+            "Use this sport's score controls. Basketball commands do not apply to this match.",
+        );
     }
     Ok(())
 }

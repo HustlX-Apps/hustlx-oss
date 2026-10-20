@@ -57,6 +57,31 @@ impl App {
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
         self.now = Instant::now();
+        // A stale widget message or basketball shortcut must never act on another sport.
+        if self.is_sport_match()
+            && matches!(
+                message,
+                Message::Clock(_)
+                    | Message::ToggleClock
+                    | Message::ToggleClockEditor
+                    | Message::GameTime(_)
+                    | Message::ShotTime(_)
+                    | Message::ApplyGameTime
+                    | Message::ApplyShotTime
+                    | Message::ToggleHotkeys
+                    | Message::Select(..)
+                    | Message::Record(_)
+                    | Message::OpenLineup(..)
+                    | Message::CancelLineup
+                    | Message::LineupPick(_)
+                    | Message::LineupRemove(_)
+                    | Message::ClearLineup
+                    | Message::SaveLineup
+                    | Message::ShowLineupHistory
+            )
+        {
+            return Task::none();
+        }
         let result = match message {
             Message::Tick(now) => {
                 self.now = now;
@@ -200,8 +225,7 @@ impl App {
             self.show_hotkeys = false;
             return Task::none();
         }
-        let enabled = self.screen == Screen::GameDay
-            && self.active().is_some()
+        let enabled = self.basketball_game_day()
             && !self.pending()
             && !self.clock_edit
             && !self.show_hotkeys
