@@ -51,7 +51,7 @@ Install Rust with [rustup](https://rustup.rs/), then run `cargo run --locked`. S
 - [Architecture](docs/architecture-proposal.md): implemented Rust/SQLite/clock boundaries and proposed sync.
 - [Lineups and substitutions](docs/lineups-substitutions.md): starting players, swaps, history and save behavior.
 - [Local storage](docs/storage.md): schema, data paths, snapshots, and failure handling.
-- [Versioning and local packaging](docs/releases.md): macOS/Windows commands, dry-run and signing limits.
+- [Versions and GitHub Releases](docs/releases.md): version preparation, Windows/macOS builds, explicit publishing and signing limits.
 - [Roadmap](docs/roadmap.md): implementation slices and acceptance evidence.
 - [UI reference](docs/references/README.md): capture provenance and visual parity notes.
 - [Contributing](CONTRIBUTING.md): small changes, documentation, and verification expectations.

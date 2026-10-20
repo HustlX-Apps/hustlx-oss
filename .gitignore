@@ -21,3 +21,6 @@ dist/
 *.key
 /exports/
 /backups/
+__pycache__/
+/artifacts/
+/release-assets/

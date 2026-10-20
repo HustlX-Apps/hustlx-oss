@@ -82,6 +82,53 @@ fn version_preparation_keeps_dependency_and_tool_versions() {
     prepare_version(&t.0, "1.2.3-beta.1").unwrap();
 }
 #[test]
+fn automatic_bumps_reset_lower_components_and_reject_ambiguous_prereleases() {
+    let v = Version::parse("1.2.3").unwrap();
+    for (kind, expected) in [("patch", "1.2.4"), ("minor", "1.3.0"), ("major", "2.0.0")] {
+        assert_eq!(v.bump(kind).unwrap().full, expected);
+    }
+    assert!(v.bump("banana").is_err());
+    assert!(
+        Version::parse("1.2.3-beta.1")
+            .unwrap()
+            .bump("patch")
+            .is_err()
+    );
+    assert!(
+        Version::parse("4294967295.0.0")
+            .unwrap()
+            .bump("major")
+            .is_err()
+    );
+}
+
+#[test]
+fn version_command_preview_is_read_only_and_bump_changes_app_only() {
+    let t = fixture();
+    let manifest = fs::read(t.0.join("Cargo.toml")).unwrap();
+    let lock = fs::read(t.0.join("Cargo.lock")).unwrap();
+    assert_eq!(
+        version_command(&t.0, &["--bump", "minor", "--dry-run"]).unwrap(),
+        "0.2.0"
+    );
+    assert_eq!(fs::read(t.0.join("Cargo.toml")).unwrap(), manifest);
+    assert_eq!(fs::read(t.0.join("Cargo.lock")).unwrap(), lock);
+    assert_eq!(
+        version_command(&t.0, &["--bump", "patch"]).unwrap(),
+        "0.1.1"
+    );
+    let lock = read(&t.0.join("Cargo.lock")).unwrap();
+    assert!(lock.contains("name = \"xtask\"\nversion = \"0.1.0\""));
+    assert!(lock.contains("name = \"other\"\nversion = \"3.0.0\""));
+    for args in [
+        vec!["--bump"],
+        vec!["--dry-run"],
+        vec!["--bump", "patch", "--dry-run", "extra"],
+    ] {
+        assert!(version_command(&t.0, &args).is_err());
+    }
+}
+#[test]
 fn invalid_or_divergent_versions_never_mutate_files() {
     let t = fixture();
     let before = fs::read(t.0.join("Cargo.toml")).unwrap();

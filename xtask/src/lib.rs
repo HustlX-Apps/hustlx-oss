@@ -12,6 +12,28 @@ struct Version {
     numeric: String,
 }
 impl Version {
+    fn bump(&self, kind: &str) -> Result<Self> {
+        if self.full != self.numeric {
+            return Err("Use an exact VERSION for prerelease/build versions.".into());
+        }
+        let mut parts: Vec<u32> = self
+            .numeric
+            .split('.')
+            .map(|p| p.parse().unwrap())
+            .collect();
+        let index = match kind {
+            "major" => 0,
+            "minor" => 1,
+            "patch" => 2,
+            _ => return Err("Choose --bump patch, minor or major.".into()),
+        };
+        parts[index] = parts[index]
+            .checked_add(1)
+            .ok_or("Version component overflow.")?;
+        parts[index + 1..].fill(0);
+        Self::parse(&format!("{}.{}.{}", parts[0], parts[1], parts[2]))
+    }
+
     fn parse(value: &str) -> Result<Self> {
         let (without_build, build) = value
             .split_once('+')
@@ -116,6 +138,21 @@ fn prepare_version(root: &Path, value: &str) -> Result<()> {
         ));
     }
     Ok(())
+}
+fn version_command(root: &Path, args: &[&str]) -> Result<String> {
+    let (value, dry) = match args {
+        [] => return Ok(current_version(root)?.full),
+        ["--bump", kind] => (current_version(root)?.bump(kind)?.full, false),
+        ["--bump", kind, "--dry-run"] => (current_version(root)?.bump(kind)?.full, true),
+        [value] if !value.starts_with('-') => (Version::parse(value)?.full, false),
+        [value, "--dry-run"] if !value.starts_with('-') => (Version::parse(value)?.full, true),
+        _ => return Err("Use version [VERSION | --bump patch|minor|major] [--dry-run].".into()),
+    };
+    current_version(root)?;
+    if !dry {
+        prepare_version(root, &value)?;
+    }
+    Ok(value)
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Os {
@@ -403,20 +440,13 @@ pub fn run(args: Vec<String>) -> Result<()> {
         .ok_or("Cannot find repository root")?;
     if args.is_empty() || args == ["--help"] || args == ["help"] {
         println!(
-            "cargo xtask version [VERSION]\ncargo xtask release --version VERSION [--target TARGET] [--dry-run]\n\nVersion changes Cargo.toml/Cargo.lock only. Release builds local ZIPs/checksums only. Nothing publishes or tags."
+            "cargo xtask version [VERSION | --bump patch|minor|major] [--dry-run]\ncargo xtask release --version VERSION [--target TARGET] [--dry-run]\n\nVersion changes Cargo.toml/Cargo.lock only; --dry-run prints the next version without writes. Release builds local ZIPs/checksums only. GitHub automation: python3 scripts/github_release.py --help."
         );
         return Ok(());
     }
-    if args == ["version"] {
-        println!("{}", current_version(root)?.full);
-        return Ok(());
-    }
-    if args.first().is_some_and(|a| a == "version") && args.len() == 2 {
-        prepare_version(root, &args[1])?;
-        println!(
-            "Prepared version {}. Review the Cargo.toml/Cargo.lock diff; nothing committed or tagged.",
-            args[1]
-        );
+    if args.first().is_some_and(|a| a == "version") {
+        let options: Vec<_> = args[1..].iter().map(String::as_str).collect();
+        println!("{}", version_command(root, &options)?);
         return Ok(());
     }
     if args.first().is_none_or(|a| a != "release") {
