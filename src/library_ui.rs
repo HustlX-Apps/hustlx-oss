@@ -415,62 +415,137 @@ impl App {
         .into()
     }
     fn teams_view(&self, c: Colors) -> Element<'_, Message> {
+        let visible_teams = self.teams.iter().filter(|t| self.show_teams || !t.archived);
+        let count = visible_teams.clone().count();
         let mut controls = row![
-            button(if self.editing_team.is_some() {
-                "Save team"
-            } else {
-                "Create team"
-            })
+            button(
+                text(if self.editing_team.is_some() {
+                    "Save team"
+                } else {
+                    "Create team"
+                })
+                .size(13)
+            )
             .on_press(Message::SaveTeam)
             .padding([10, 14])
         ]
         .spacing(8);
         if self.editing_team.is_some() {
-            controls = controls.push(button("Cancel").on_press(Message::CancelTeam));
+            controls = controls.push(
+                button(text("Cancel").size(13))
+                    .on_press(Message::CancelTeam)
+                    .padding([10, 14])
+                    .style(brand::secondary),
+            );
         }
-        let mut list = column![
-            text("Teams").size(23).font(HEADING),
-            text_input("Team name", &self.team_name)
-                .on_input(Message::TeamName)
-                .on_submit(Message::SaveTeam)
-                .padding(10),
+        let mut list = column![].spacing(8).width(Fill);
+        for team in visible_teams {
+            let selected = self.roster_team.as_ref().is_some_and(|t| t.id == team.id);
+            list = list.push(
+                container(
+                    column![
+                        button(
+                            column![
+                                text(&team.name)
+                                    .color(if team.archived { c.muted } else { c.text })
+                                    .size(15)
+                                    .font(SEMIBOLD)
+                                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+                                text(if team.archived {
+                                    "Archived"
+                                } else if selected {
+                                    "Viewing roster"
+                                } else {
+                                    "View roster"
+                                })
+                                .size(11)
+                                .color(if selected {
+                                    c.home
+                                } else {
+                                    c.muted
+                                }),
+                            ]
+                            .spacing(5)
+                            .width(Fill)
+                        )
+                        .on_press_maybe(
+                            (!team.archived).then_some(Message::RosterTeam(team.clone()))
+                        )
+                        .width(Fill)
+                        .padding(0)
+                        .style(button::text),
+                        row![
+                            button(text("Rename").size(12))
+                                .on_press(Message::EditTeam(team.id))
+                                .padding([7, 10])
+                                .style(brand::secondary),
+                            button(
+                                text(if team.archived { "Restore" } else { "Archive" }).size(12)
+                            )
+                            .on_press(Message::ArchiveTeam(team.id, !team.archived))
+                            .padding([7, 10])
+                            .style(brand::secondary),
+                        ]
+                        .spacing(8),
+                    ]
+                    .spacing(12)
+                    .width(Fill),
+                )
+                .padding(14)
+                .width(Fill)
+                .style(move |_| {
+                    container::Style::default()
+                        .background(if selected {
+                            blend(c.panel, c.home, 0.07)
+                        } else {
+                            c.panel
+                        })
+                        .color(c.text)
+                        .border(Border {
+                            color: if selected { c.home } else { c.border },
+                            width: 1.0,
+                            radius: 10.0.into(),
+                        })
+                }),
+            );
+        }
+        if count == 0 {
+            list = list.push(empty(
+                "No teams to show",
+                "Create a team or show archived teams to restore one.",
+                c,
+            ));
+        }
+        let sidebar = column![
+            row![
+                text("Teams").size(23).font(HEADING),
+                Space::new().width(Fill),
+                badge(format!("{count} teams"), c.home, c)
+            ]
+            .align_y(alignment::Vertical::Center),
+            field(
+                if self.editing_team.is_some() {
+                    "Rename team"
+                } else {
+                    "Add a team"
+                },
+                text_input("Team name", &self.team_name)
+                    .on_input(Message::TeamName)
+                    .on_submit(Message::SaveTeam)
+                    .size(14)
+                    .padding(10)
+                    .into(),
+                c
+            ),
             controls,
             checkbox(self.show_teams)
                 .label("Show archived teams")
-                .on_toggle(Message::ShowTeams)
+                .text_size(12)
+                .on_toggle(Message::ShowTeams),
+            scrollable(list).spacing(8).height(Fill),
         ]
-        .spacing(14);
-        for team in self.teams.iter().filter(|t| self.show_teams || !t.archived) {
-            list = list.push(card(
-                column![
-                    text(format!(
-                        "{}{}",
-                        team.name,
-                        if team.archived { " (archived)" } else { "" }
-                    ))
-                    .size(16)
-                    .font(HEADING),
-                    row![
-                        button(text("Rename").size(11)).on_press(Message::EditTeam(team.id)),
-                        button(text(if team.archived { "Restore" } else { "Archive" }).size(11))
-                            .on_press(Message::ArchiveTeam(team.id, !team.archived)),
-                        button(text("Roster").size(11)).on_press_maybe(
-                            (!team.archived).then_some(Message::RosterTeam(team.clone()))
-                        )
-                    ]
-                    .spacing(6),
-                ]
-                .spacing(10),
-                c,
-            ));
-        }
-        if self.teams.is_empty() {
-            list = list.push(empty(
-                "Your first team",
-                "Create teams here, then add players to their rosters.",
-                c,
-            ));
-        }
+        .spacing(16)
+        .height(Fill);
         let choices = self
             .teams
             .iter()
@@ -483,82 +558,170 @@ impl App {
             .filter(|p| !p.archived)
             .cloned()
             .collect::<Vec<_>>();
-        let mut roster = column![
-            text("Team roster").size(23).font(HEADING),
-            pick_list(choices, self.roster_team.as_ref(), Message::RosterTeam)
-                .placeholder("Choose a team")
-                .width(Fill)
-                .padding(10),
-            text("Changes apply to new matches. Saved match rosters stay unchanged.")
-                .size(12)
-                .color(c.muted)
+        let mut roster =
+            column![
+            row![text("Team roster").size(23).font(HEADING), Space::new().width(Fill),
+                badge(format!("{} players", self.roster.len()), c.home, c)]
+                .align_y(alignment::Vertical::Center),
+            field("Team", pick_list(choices, self.roster_team.as_ref(), Message::RosterTeam)
+                .placeholder("Choose a team").text_size(14).style(brand::select)
+                .width(Fill).padding(10).into(), c),
+            text("Roster changes apply to new matches. Saved matches keep their original rosters.")
+                .size(12).color(c.muted),
         ]
-        .spacing(14);
+            .spacing(16);
         if self.roster_team.is_some() {
-            roster = roster
-                .push(
-                    pick_list(
-                        player_choices,
-                        self.roster_player.as_ref(),
-                        Message::RosterPlayer,
-                    )
-                    .placeholder("Choose an existing player")
-                    .width(Fill)
-                    .padding(10),
-                )
-                .push(
-                    row![
-                        text_input("Jersey label (optional)", &self.jersey)
-                            .on_input(Message::Jersey)
-                            .padding(10)
-                            .width(Fill),
-                        button("Add / update player")
-                            .on_press_maybe(
-                                self.roster_player.as_ref().map(|_| Message::SaveRoster)
-                            )
-                            .padding([10, 14])
+            let editing = self
+                .roster_player
+                .as_ref()
+                .is_some_and(|player| self.roster.iter().any(|p| p.player_id == player.id));
+            roster = roster.push(
+                container(
+                    column![
+                        text(if editing {
+                            "Update roster player"
+                        } else {
+                            "Add a player"
+                        })
+                        .size(15)
+                        .font(SEMIBOLD),
+                        row![
+                            container(field(
+                                "Player",
+                                pick_list(
+                                    player_choices,
+                                    self.roster_player.as_ref(),
+                                    Message::RosterPlayer
+                                )
+                                .placeholder("Choose an existing player")
+                                .text_size(14)
+                                .style(brand::select)
+                                .width(Fill)
+                                .padding(10)
+                                .into(),
+                                c
+                            ))
+                            .width(Length::FillPortion(3)),
+                            container(field(
+                                "Jersey label (optional)",
+                                text_input("e.g. 12", &self.jersey)
+                                    .on_input(Message::Jersey)
+                                    .size(14)
+                                    .padding(10)
+                                    .into(),
+                                c
+                            ))
+                            .width(Length::FillPortion(2)),
+                        ]
+                        .spacing(12),
+                        button(
+                            text(if editing {
+                                "Update player"
+                            } else {
+                                "Add to roster"
+                            })
+                            .size(13)
+                        )
+                        .on_press_maybe(self.roster_player.as_ref().map(|_| Message::SaveRoster))
+                        .padding([10, 14]),
                     ]
-                    .spacing(10),
-                );
+                    .spacing(12)
+                    .width(Fill),
+                )
+                .padding(16)
+                .width(Fill)
+                .style(move |_| {
+                    container::Style::default()
+                        .background(c.row)
+                        .border(Border {
+                            color: c.border,
+                            width: 1.0,
+                            radius: 10.0.into(),
+                        })
+                }),
+            );
+            let mut members = column![].spacing(8).width(Fill);
             if self.roster.is_empty() {
-                roster = roster.push(empty(
+                members = members.push(empty(
                     "No players on this roster",
                     "Create players in the Players tab, then add them here.",
                     c,
                 ));
             }
             for p in &self.roster {
-                roster = roster.push(card(
-                    row![
-                        text(jersey_label(&p.jersey))
-                            .size(22)
-                            .font(HEADING)
-                            .color(c.home)
-                            .width(45),
-                        column![
-                            text(&p.name).size(15),
-                            text(hustlx_oss::profile::encode(&p.positions))
+                let positions = hustlx_oss::profile::encode(&p.positions);
+                members = members.push(
+                    container(
+                        row![
+                            container(
+                                text(jersey_label(&p.jersey))
+                                    .size(if p.jersey.chars().count() > 3 { 13 } else { 22 })
+                                    .font(HEADING)
+                                    .color(c.home)
+                                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                                    .width(Fill)
+                                    .align_x(alignment::Horizontal::Center)
+                            )
+                            .padding([10, 6])
+                            .width(76)
+                            .clip(true)
+                            .style(move |_| container::Style::default()
+                                .background(blend(c.panel, c.home, 0.08))
+                                .border(Border {
+                                    radius: 8.0.into(),
+                                    ..Border::default()
+                                })),
+                            column![
+                                text(&p.name)
+                                    .size(15)
+                                    .font(SEMIBOLD)
+                                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+                                text(if positions.is_empty() {
+                                    "No positions set".to_owned()
+                                } else {
+                                    positions
+                                })
                                 .size(11)
-                                .color(c.muted)
+                                .color(c.muted),
+                            ]
+                            .spacing(5)
+                            .width(Fill),
+                            button(text("Edit jersey").size(12))
+                                .on_press(Message::EditJersey(p.player_id))
+                                .padding([8, 10])
+                                .style(brand::secondary),
+                            button(text("Remove").size(12))
+                                .on_press(Message::RemoveRoster(p.player_id))
+                                .padding([8, 10])
+                                .style(brand::secondary),
                         ]
-                        .width(Fill),
-                        button(text("Jersey").size(11)).on_press(Message::EditJersey(p.player_id)),
-                        button(text("Remove").size(11))
-                            .on_press(Message::RemoveRoster(p.player_id))
-                    ]
-                    .spacing(8)
-                    .align_y(alignment::Vertical::Center),
-                    c,
-                ));
+                        .spacing(12)
+                        .align_y(alignment::Vertical::Center),
+                    )
+                    .padding(12)
+                    .width(Fill)
+                    .style(move |_| {
+                        container::Style::default()
+                            .background(c.panel)
+                            .border(Border {
+                                color: c.border,
+                                width: 1.0,
+                                radius: 10.0.into(),
+                            })
+                    }),
+                );
             }
+            roster = roster.push(scrollable(members).spacing(8).height(Fill));
+        } else {
+            roster = roster.push(empty(
+                "Choose a team",
+                "Select a team on the left to manage its roster.",
+                c,
+            ));
         }
         row![
-            card(scrollable(list).spacing(8).height(Fill), c)
-                .width(Length::FillPortion(4))
-                .height(Fill),
-            card(scrollable(roster).spacing(8).height(Fill), c)
-                .width(Length::FillPortion(6))
-                .height(Fill)
+            card(sidebar, c).width(340).height(Fill),
+            card(roster.height(Fill), c).width(Fill).height(Fill),
         ]
         .spacing(16)
         .height(Fill)

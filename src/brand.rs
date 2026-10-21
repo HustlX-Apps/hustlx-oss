@@ -1,5 +1,5 @@
 //! Offline HustlX identity, aligned with the web theme and native font assets.
-use iced::widget::{button, svg};
+use iced::widget::{button, pick_list, svg};
 use iced::{
     Background, Border, Color, Font, Theme,
     theme::{
@@ -146,4 +146,24 @@ pub fn secondary(theme: &Theme, status: button::Status) -> button::Style {
         style.text_color = c.muted;
     }
     style
+}
+
+/// Neutral library selects retain a clear border without looking disabled.
+pub fn select(theme: &Theme, status: pick_list::Status) -> pick_list::Style {
+    let c = Colors::new(theme.extended_palette().is_dark);
+    pick_list::Style {
+        text_color: c.text,
+        placeholder_color: c.muted,
+        handle_color: c.muted,
+        background: c.panel.into(),
+        border: Border {
+            color: if matches!(status, pick_list::Status::Active) {
+                c.border
+            } else {
+                c.home
+            },
+            width: 1.0,
+            radius: 6.0.into(),
+        },
+    }
 }
