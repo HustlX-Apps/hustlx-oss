@@ -15,6 +15,8 @@ pub enum Sport {
     Tennis,
     Badminton,
     Padel,
+    Football,
+    Futsal,
 }
 impl fmt::Display for Sport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -22,7 +24,7 @@ impl fmt::Display for Sport {
     }
 }
 impl Sport {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 9] = [
         Self::Basketball,
         Self::Volleyball,
         Self::Pickleball,
@@ -30,6 +32,8 @@ impl Sport {
         Self::Tennis,
         Self::Badminton,
         Self::Padel,
+        Self::Football,
+        Self::Futsal,
     ];
     pub fn label(self) -> &'static str {
         match self {
@@ -40,6 +44,8 @@ impl Sport {
             Self::Tennis => "Tennis",
             Self::Badminton => "Badminton",
             Self::Padel => "Padel",
+            Self::Football => "Football",
+            Self::Futsal => "Futsal",
         }
     }
     pub fn slug(self) -> &'static str {
@@ -51,10 +57,15 @@ impl Sport {
             Self::Tennis => "tennis",
             Self::Badminton => "badminton",
             Self::Padel => "padel",
+            Self::Football => "football",
+            Self::Futsal => "futsal",
         }
     }
     fn tennis(self) -> bool {
         matches!(self, Self::Tennis | Self::Padel)
+    }
+    pub fn field(self) -> bool {
+        matches!(self, Self::Football | Self::Futsal)
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,6 +117,8 @@ pub struct Rules {
     pub tiebreak_target: u16,
     pub match_tiebreak: bool,
     pub first_server: Side,
+    #[serde(default)]
+    pub period_minutes: u16,
 }
 impl Rules {
     pub fn defaults(sport: Sport) -> Self {
@@ -120,6 +133,13 @@ impl Rules {
             tiebreak_target: 7,
             match_tiebreak: false,
             first_server: Side::Home,
+            period_minutes: if sport == Sport::Football {
+                45
+            } else if sport == Sport::Futsal {
+                20
+            } else {
+                0
+            },
         };
         match sport {
             Sport::Volleyball => {
@@ -149,13 +169,20 @@ impl Rules {
                     r.format = Format::Doubles;
                 }
             }
-            Sport::Basketball => {}
+            Sport::Basketball | Sport::Football | Sport::Futsal => {}
         }
         r
     }
     fn validate(&self, sport: Sport) -> Result<(), ScoreError> {
         if sport == Sport::Basketball {
             return Err(ScoreError("Basketball uses the existing Game Day console"));
+        }
+        if sport.field() {
+            return if (1..=180).contains(&self.period_minutes) {
+                Ok(())
+            } else {
+                Err(ScoreError("Period length must be 1 to 180 minutes"))
+            };
         }
         if self.best_of == 0 || self.best_of.is_multiple_of(2) {
             return Err(ScoreError("Best of must be a positive odd number"));
@@ -208,9 +235,32 @@ pub enum Status {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Command {
+    Field(crate::field_sport::FieldCommand),
+    FieldAt {
+        clock_ms: u64,
+        running: bool,
+        command: crate::field_sport::FieldCommand,
+    },
     Rally(Side),
     SetServer(Side),
     Complete,
+    Player {
+        side: Side,
+        player: Option<i64>,
+        action: crate::operator::PlayerAction,
+    },
+    Lineup {
+        side: Side,
+        players: [i64; 11],
+    },
+    Exchange {
+        side: Side,
+        outgoing: i64,
+        incoming: i64,
+        libero: bool,
+    },
+    Rotate(Side),
+    Timeout(Side),
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UnitScore {
@@ -222,6 +272,8 @@ pub struct UnitScore {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct State {
+    pub field: Option<crate::field_sport::FieldState>,
+    pub operator: crate::operator::OperatorState,
     pub sport: Sport,
     rules: Rules,
     pub status: Status,
@@ -296,6 +348,18 @@ impl State {
         let first = rules.first_server;
         let match_tb = sport.tennis() && rules.match_tiebreak && rules.best_of == 1;
         Ok(Self {
+            field: if sport.field() {
+                Some(
+                    crate::field_sport::FieldState::new(
+                        sport == Sport::Futsal,
+                        u64::from(rules.period_minutes) * 60_000,
+                    )
+                    .map_err(|e| ScoreError(e.0))?,
+                )
+            } else {
+                None
+            },
+            operator: crate::operator::OperatorState::default(),
             sport,
             rules,
             status: Status::Live,
@@ -332,6 +396,46 @@ impl State {
         Ok(())
     }
     fn apply_inner(&mut self, command: Command) -> Result<(), ScoreError> {
+        if let Command::FieldAt {
+            clock_ms,
+            running,
+            command,
+        } = command
+        {
+            self.apply_inner(Command::Field(
+                crate::field_sport::FieldCommand::Checkpoint { clock_ms, running },
+            ))?;
+            return self.apply_inner(Command::Field(command));
+        }
+        if let Command::Field(command) = command {
+            let field = self.field.as_mut().ok_or(ScoreError(
+                "Field controls apply only to football and futsal",
+            ))?;
+            field.apply(command).map_err(|e| ScoreError(e.0))?;
+            self.points = field.score;
+            self.unit_number = u16::from(field.period);
+            self.winner = if field.completed {
+                field.winner()
+            } else {
+                None
+            };
+            self.status = if field.completed {
+                Status::Completed
+            } else {
+                Status::Live
+            };
+            return Ok(());
+        }
+        if self.sport.field()
+            && !matches!(
+                command,
+                Command::Lineup { .. }
+                    | Command::Exchange { libero: false, .. }
+                    | Command::Timeout(_)
+            )
+        {
+            return Err(ScoreError("Use football or futsal controls for this match"));
+        }
         if command == Command::Complete {
             if self.status != Status::Decided {
                 return Err(ScoreError("Finish the match before completing it"));
@@ -345,6 +449,41 @@ impl State {
             ));
         }
         match command {
+            Command::Field(_) | Command::FieldAt { .. } => unreachable!(),
+            Command::Player {
+                side,
+                player,
+                action,
+            } => {
+                if !crate::operator::PlayerAction::for_sport(self.sport).contains(&action) {
+                    return Err(ScoreError("This action does not apply to this sport"));
+                }
+                self.operator.record(side, player, action)?;
+                if let Some(winner) = action.winner(side) {
+                    self.apply_inner(Command::Rally(winner))?;
+                }
+                Ok(())
+            }
+            Command::Lineup { side, players } => self.operator.lineup(side, players),
+            Command::Exchange {
+                side,
+                outgoing,
+                incoming,
+                libero,
+            } => {
+                if libero && self.sport != Sport::Volleyball {
+                    return Err(ScoreError("Libero exchanges apply only to volleyball"));
+                }
+                self.operator.exchange(side, outgoing, incoming, libero)
+            }
+            Command::Rotate(side) => {
+                if self.sport != Sport::Volleyball {
+                    return Err(ScoreError("Rotation applies only to volleyball"));
+                }
+                self.operator.rotate(side);
+                Ok(())
+            }
+            Command::Timeout(side) => self.operator.timeout(side),
             Command::SetServer(side) => {
                 self.server = side;
                 self.unit_first_server = side;
@@ -448,6 +587,9 @@ impl State {
             };
         } else if self.sport == Sport::Volleyball {
             self.server = side;
+            if old_server != side {
+                self.operator.rotate(side);
+            }
         }
         let threshold = match self.sport {
             Sport::TableTennis => Some(5),
@@ -571,6 +713,7 @@ impl State {
             return Ok(());
         }
         add(&mut self.unit_number)?;
+        self.operator.begin_unit();
         self.points = [0, 0];
         self.games = [0, 0];
         self.deuce_count = 0;

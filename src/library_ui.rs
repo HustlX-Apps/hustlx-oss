@@ -92,6 +92,10 @@ impl App {
             Message::Refresh => self.refresh()?,
             Message::RetryStorage => self.connect()?,
             Message::OpenMatch(id) => {
+                self.operator_draft = None;
+                self.operator_chooser = None;
+                self.operator_finish = false;
+                self.operator_time.clear();
                 self.session_mut()?.open(id)?;
                 self.lineup_draft = None;
                 self.lineup_history = false;
@@ -102,6 +106,10 @@ impl App {
                 self.screen = Screen::GameDay;
             }
             Message::CreateMatch => {
+                self.operator_draft = None;
+                self.operator_chooser = None;
+                self.operator_finish = false;
+                self.operator_time.clear();
                 if self.pending() {
                     return Err(Error::Validation(
                         "Retry the pending save or reopen the match before creating another match."
@@ -128,7 +136,8 @@ impl App {
                         sport: self.sport_setup.sport,
                         rules: self.sport_setup.rules()?,
                     };
-                    self.session_mut()?.create_sport(&draft)?;
+                    let teams = [f.home.as_ref().map(|t| t.id), f.away.as_ref().map(|t| t.id)];
+                    self.session_mut()?.create_sport_with_teams(&draft, teams)?;
                 }
                 self.lineup_draft = None;
                 self.lineup_history = false;
@@ -143,8 +152,14 @@ impl App {
             Message::MatchName(value) => self.match_form.name = value,
             Message::MatchDate(value) => self.match_form.date = value,
             Message::MatchVenue(value) => self.match_form.venue = value,
-            Message::HomeTeam(team) => self.match_form.home = Some(team),
-            Message::AwayTeam(team) => self.match_form.away = Some(team),
+            Message::HomeTeam(team) => {
+                self.sport_setup.home = team.name.clone();
+                self.match_form.home = Some(team);
+            }
+            Message::AwayTeam(team) => {
+                self.sport_setup.away = team.name.clone();
+                self.match_form.away = Some(team);
+            }
             Message::TeamName(value) => self.team_name = value,
             Message::SaveTeam => {
                 let id = if let Some(id) = self.editing_team {
@@ -345,6 +360,9 @@ impl App {
             f.home.is_some() && f.away.is_some()
         } else {
             form = form.push(self.sport_setup_view(c));
+            form=form.push(field("Home roster (optional)",pick_list(home_choices,f.home.as_ref(),Message::HomeTeam).placeholder("Named side only").width(Fill).padding(10).into(),c))
+                .push(field("Away roster (optional)",pick_list(away_choices,f.away.as_ref(),Message::AwayTeam).placeholder("Named side only").width(Fill).padding(10).into(),c))
+                .push(text("Selected rosters are copied into this match. Player actions and lineup controls use those saved identities.").size(11).color(c.muted));
             !self.sport_setup.home.trim().is_empty() && !self.sport_setup.away.trim().is_empty()
         };
         form = form.push(

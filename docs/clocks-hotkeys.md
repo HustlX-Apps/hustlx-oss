@@ -32,6 +32,8 @@ Players supports an optional default jersey and any combination of PG, SG, SF, P
 
 ## Keyboard guide
 
+Tab and Shift-Tab move between focusable text fields throughout the app. Enter submits Football/Futsal clock corrections through Set time. Escape cancels non-Basketball lineup/exchange drafts, the Volleyball outcome chooser and result review without saving. A focused text field consumes its first Escape to leave text editing. Basketball keys below remain exclusive to its Game Day console. Native checks and resolved issues are recorded in [the nine-sport keyboard/UI audit](evidence/native-sport-e2e/README.md).
+
 Shortcuts use the supported mappings from web v2. They work on Game Day, outside text fields, the help/editor panels and pending saves. Held-key repeats and Ctrl/Command/Alt combinations are ignored. Open **Hotkeys ?** for the in-app guide.
 
 | Key | Action |

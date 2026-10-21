@@ -31,6 +31,12 @@ impl App {
                         Key::Named(Named::Space) => " ".into(),
                         Key::Named(Named::Escape) => "Escape".into(),
                         Key::Named(Named::Backspace) => "Backspace".into(),
+                        Key::Named(Named::Tab) => if modifiers.shift() {
+                            "Shift+Tab"
+                        } else {
+                            "Tab"
+                        }
+                        .into(),
                         _ => return None,
                     },
                 };
@@ -47,7 +53,13 @@ impl App {
             _ => None,
         });
         let ticks = if cfg!(target_os = "macos")
-            || (self.active().is_some_and(|a| a.clock.running) && !self.pending())
+            || (self.active().is_some_and(|a| {
+                a.clock.running
+                    || a.sport_state
+                        .as_ref()
+                        .and_then(|s| s.field.as_ref())
+                        .is_some_and(|f| f.running)
+            }) && !self.pending())
         {
             iced::time::every(Duration::from_millis(100)).map(Message::Tick)
         } else {
@@ -212,6 +224,20 @@ impl App {
         modified: bool,
         captured: bool,
     ) -> Task<Message> {
+        if !repeat && !modified && !captured {
+            if key == "Tab" {
+                return iced::widget::operation::focus_next();
+            }
+            if key == "Shift+Tab" {
+                return iced::widget::operation::focus_previous();
+            }
+            if key == "Escape" && self.is_sport_match() {
+                self.operator_draft = None;
+                self.operator_chooser = None;
+                self.operator_finish = false;
+                return Task::none();
+            }
+        }
         if (self.lineup_draft.is_some() || self.lineup_history)
             && !repeat
             && !modified
@@ -241,7 +267,10 @@ impl App {
         match action {
             Some(Action::Stat(stat)) => match self.hotkeys.target(self.game()) {
                 Ok((side, id)) => {
-                    if let Some(s) = &mut self.session {
+                    if let Some(s) = &mut self.session
+                        && s.active()
+                            .is_some_and(|a| a.game.selected != Some((side, id)))
+                    {
                         s.select(side, id);
                     }
                     self.update_core(Message::Record(stat));

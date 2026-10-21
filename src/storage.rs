@@ -18,6 +18,7 @@ use uuid::Uuid;
 mod lineups;
 #[path = "sport_storage.rs"]
 mod sports;
+pub use sports::undoable as sport_action_undoable;
 pub use sports::{SportEvent, SportMatchDraft};
 const APPLICATION_ID: i64 = 0x48584f53;
 
@@ -130,7 +131,9 @@ impl Store {
         }
         let mut connection = Connection::open(path)?;
         connection.busy_timeout(Duration::from_millis(250))?;
-        connection.pragma_update(None, "foreign_keys", true)?;
+        // SQLite's documented parent-table rebuild procedure requires FK enforcement
+        // off before BEGIN, then an explicit integrity check before COMMIT.
+        connection.pragma_update(None, "foreign_keys", false)?;
         let tx = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let version: i64 = tx.pragma_query_value(None, "user_version", |r| r.get(0))?;
         let app: i64 = tx.pragma_query_value(None, "application_id", |r| r.get(0))?;
@@ -144,7 +147,7 @@ impl Store {
                 tx.pragma_update(None, "application_id", APPLICATION_ID)?;
                 tx.pragma_update(None, "user_version", 1)?;
             }
-            1..=5 if app == APPLICATION_ID => {}
+            1..=6 if app == APPLICATION_ID => {}
             _ => return Err(Error::UnsupportedSchema),
         }
         if version < 2 {
@@ -163,7 +166,38 @@ impl Store {
             tx.execute_batch(include_str!("migration_v5.sql"))?;
             tx.pragma_update(None, "user_version", 5)?;
         }
+        if version < 6 {
+            let sequence: i64 = tx.query_row(
+                "SELECT coalesce((SELECT seq FROM sqlite_sequence WHERE name='matches'),0)",
+                [],
+                |r| r.get(0),
+            )?;
+            let objects = {
+                let mut stmt=tx.prepare("SELECT sql FROM sqlite_schema WHERE tbl_name='matches' AND type IN ('index','trigger') AND sql IS NOT NULL")?;
+                stmt.query_map([], |r| r.get::<_, String>(0))?
+                    .collect::<rusqlite::Result<Vec<_>>>()?
+            };
+            tx.execute_batch(include_str!("migration_v6.sql"))?;
+            tx.execute(
+                "UPDATE sqlite_sequence SET seq=max(seq,?1) WHERE name='matches'",
+                [sequence],
+            )?;
+            for sql in objects {
+                tx.execute_batch(&sql)?;
+            }
+            tx.pragma_update(None, "user_version", 6)?;
+        }
+        let broken: i64 =
+            tx.query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| {
+                r.get(0)
+            })?;
+        if broken != 0 {
+            return invalid(
+                "Library relationships are invalid. Preserve this file and restore a known backup.",
+            );
+        }
         tx.commit()?;
+        connection.pragma_update(None, "foreign_keys", true)?;
         connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;")?;
         Ok(Self { connection })
     }

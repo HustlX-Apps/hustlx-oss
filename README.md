@@ -1,8 +1,8 @@
 # HustlX OSS
 
-Offline-first Game Day for Windows and macOS, built with Rust, Iced and SQLite. Run Volleyball, Pickleball, Table Tennis, Tennis (Long Tennis), Badminton and Padel matches locally alongside the existing basketball console.
+Offline-first Game Day for Windows and macOS, built with Rust, Iced and SQLite. Run Volleyball, Pickleball, Table Tennis, Tennis (Long Tennis), Badminton, Padel, Football and Futsal matches locally alongside the existing basketball console.
 
-**Status:** native Rust application in development, licensed under MIT. The Iced interface now supports a SQLite team/player library, roster editing, match creation and reopening, durable stat entry/undo, game/shot clocks, jersey/position profiles, supported web v2 hotkeys, starting lineups and confirmed substitutions. The six additional sports support configurable side-level scoring, service state, durable undo, explicit completion and reopened results. Cloud sync, advanced statistics for those sports, exports and installers remain planned.
+**Status:** native Rust application in development, licensed under MIT. The Iced interface now supports a SQLite team/player library, roster editing, match creation and reopening, durable stat entry/undo, game/shot clocks, jersey/position profiles, supported web v2 hotkeys, starting lineups and confirmed substitutions. The sport consoles use native participant panels, score/unit or clock strips, action pads and saved history. Optional roster snapshots support player attribution, lineups and exchanges. Volleyball includes a six-position court, rotation and libero exchanges; Football and Futsal include their own clocks, events, shootouts and draw-aware completion. Cloud sync, full statistical reports, exports and installers remain planned.
 
 The interface uses the official HustlX wordmarks, Inter body text, Exo headings and Exo Black scores, bundled for offline use. See [branding](docs/branding.md).
 
@@ -17,7 +17,7 @@ The interface uses the official HustlX wordmarks, Inter body text, Exo headings 
 
 ## Run a local sport match
 
-Run `cargo run --locked`, open **Matches**, choose a sport, enter two side names and match details, review the local rules, then create the match. Award rallies, correct with Undo and finish the decided match. Reopen it after restarting to see the saved score, service and result. See [sport workflows and limits](docs/multi-sport.md) and [verification evidence](docs/evidence/multi-sport/README.md).
+Run `cargo run --locked`, open **Matches**, choose a sport, enter two side names and match details, review the local rules, then create the match. Optionally select saved team rosters for player controls. Award rallies or field events, correct with Undo and review the final result before completing the match. Reopen it after restarting to see the saved score, service and result. See [sport workflows and limits](docs/multi-sport.md) and [current port evidence](docs/evidence/sport-ui-port/README.md).
 
 No league, login, server or runtime network access is required. Side names may represent teams, individual players or pairs.
 

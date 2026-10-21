@@ -14,10 +14,17 @@ use iced::{Border, Color, Element, Fill, Length, Theme, alignment};
 use std::{collections::BTreeMap, time::Instant};
 #[path = "clock_ui.rs"]
 mod clocks;
+#[cfg(test)]
+#[path = "sport_e2e.rs"]
+mod e2e;
+#[path = "field_ui.rs"]
+mod fields;
 #[path = "library_ui.rs"]
 mod library;
 #[path = "lineup_ui.rs"]
 mod lineups;
+#[path = "operator_ui.rs"]
+mod operators;
 #[path = "sport_ui.rs"]
 mod sports;
 
@@ -30,6 +37,18 @@ pub enum Screen {
 }
 #[derive(Debug, Clone)]
 pub enum Message {
+    OperatorTime(String),
+    ApplyOperatorTime,
+    ConfirmSportFinish,
+    CancelSportFinish,
+    FinishSport,
+    OperatorSelect(Side, i64),
+    OperatorChooser(Side, i64, bool),
+    OperatorAction(Side, Option<i64>, hustlx_oss::operator::PlayerAction),
+    OpenOperatorLineup(Side, bool, bool),
+    OperatorPick(i64),
+    SaveOperatorLineup,
+    CancelOperatorLineup,
     ChooseSport(hustlx_oss::sport::Sport),
     SportInput(sports::RuleField, String),
     SportFormat(hustlx_oss::sport::Format),
@@ -101,6 +120,10 @@ pub enum Message {
 }
 
 pub struct App {
+    operator_time: String,
+    operator_finish: bool,
+    operator_chooser: Option<(Side, i64, bool)>,
+    operator_draft: Option<operators::OperatorDraft>,
     session: Option<Session>,
     dark: bool,
     screen: Screen,
@@ -147,6 +170,10 @@ impl Default for App {
 impl App {
     fn empty() -> Self {
         Self {
+            operator_time: String::new(),
+            operator_finish: false,
+            operator_chooser: None,
+            operator_draft: None,
             session: None,
             dark: true,
             screen: Screen::Matches,
@@ -184,6 +211,18 @@ impl App {
     }
     fn update_core(&mut self, message: Message) {
         let result = match message {
+            message @ (Message::OperatorTime(..)
+            | Message::ApplyOperatorTime
+            | Message::ConfirmSportFinish
+            | Message::CancelSportFinish
+            | Message::FinishSport
+            | Message::OperatorSelect(..)
+            | Message::OperatorChooser(..)
+            | Message::OperatorAction(..)
+            | Message::OpenOperatorLineup(..)
+            | Message::OperatorPick(..)
+            | Message::SaveOperatorLineup
+            | Message::CancelOperatorLineup) => self.update_operator(message),
             message @ (Message::ChooseSport(..)
             | Message::SportInput(..)
             | Message::SportFormat(..)

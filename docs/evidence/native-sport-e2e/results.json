@@ -1,0 +1,225 @@
+{
+  "version": 1,
+  "date": "2026-10-21",
+  "host": "Darwin 27.0.0 arm64",
+  "source_base": "ef4d4d0838ea4c8cc34df4b59fbd57a9cf0efc59",
+  "binary_sha256": "d603c4962a0a4619f23f036c45c8a0c90cdeef61eab573283b2403403b155258",
+  "method": "Native keyboard/mouse automation with screenshot audit. This is a recorded macOS run, not a headless assertion lane.",
+  "library": "/tmp/hustlx-oss-native-e2e-20261021",
+  "content_size": [
+    1100,
+    760
+  ],
+  "fixture_rules": "Synthetic 12-player rosters. Best-of-1, rally targets/decider targets 2, tennis/padel set game target 2. Field default period lengths. Basketball existing defaults.",
+  "cases": [
+    {
+      "id": "NATIVE-BASKETBALL",
+      "sport": "basketball",
+      "match_id": 9,
+      "status": "passed",
+      "observed_score": [
+        6,
+        0
+      ],
+      "score_kind": "points_or_goals",
+      "units": null,
+      "checks": [
+        "typed jersey and clicked-player stat keys",
+        "Backspace undo",
+        "held-key and Ctrl guards",
+        "help and substitution key isolation",
+        "Space, shot reset and P",
+        "Tab/Enter in time editor",
+        "Quit while running, reopen paused"
+      ],
+      "reopened_capture": "basketball-reopened.jpg"
+    },
+    {
+      "id": "NATIVE-VOLLEYBALL",
+      "sport": "volleyball",
+      "match_id": 1,
+      "status": "passed",
+      "observed_score": [
+        3,
+        1
+      ],
+      "score_kind": "points_or_goals",
+      "units": [
+        1,
+        0
+      ],
+      "checks": [
+        "Escape cancels lineup and attack chooser",
+        "basketball keys ignored",
+        "rotation and undo",
+        "libero exchange and undo",
+        "attributed kill and confirmed closeout",
+        "restart preserves result"
+      ],
+      "reopened_capture": "volleyball-reopened.jpg"
+    },
+    {
+      "id": "NATIVE-PICKLEBALL",
+      "sport": "pickleball",
+      "match_id": 2,
+      "status": "passed",
+      "observed_score": [
+        2,
+        0
+      ],
+      "score_kind": "points_or_goals",
+      "units": [
+        1,
+        0
+      ],
+      "checks": [
+        "Escape cancels lineup",
+        "basketball keys ignored",
+        "receiving rally changes serve without point",
+        "undo restores server",
+        "attributed winner rallies",
+        "confirmed closeout and restart"
+      ],
+      "reopened_capture": "pickleball-reopened.jpg"
+    },
+    {
+      "id": "NATIVE-PADEL",
+      "sport": "padel",
+      "match_id": 3,
+      "status": "passed",
+      "observed_score": [
+        2,
+        0
+      ],
+      "score_kind": "last_set_games",
+      "units": [
+        1,
+        0
+      ],
+      "checks": [
+        "Escape cancels lineup",
+        "basketball keys ignored",
+        "double fault credits opponent",
+        "undo restores points",
+        "attributed game/set progression",
+        "correct last-set score and restart"
+      ],
+      "reopened_capture": "padel-reopened.jpg"
+    },
+    {
+      "id": "NATIVE-TENNIS",
+      "sport": "tennis",
+      "match_id": 4,
+      "status": "passed",
+      "observed_score": [
+        2,
+        0
+      ],
+      "score_kind": "last_set_games",
+      "units": [
+        1,
+        0
+      ],
+      "checks": [
+        "Escape cancels lineup",
+        "basketball keys ignored",
+        "live 30/15 labels",
+        "attributed winner and undo",
+        "game/set progression and result confirmation",
+        "correct last-set score and restart"
+      ],
+      "reopened_capture": "tennis-reopened.jpg"
+    },
+    {
+      "id": "NATIVE-BADMINTON",
+      "sport": "badminton",
+      "match_id": 5,
+      "status": "passed",
+      "observed_score": [
+        3,
+        1
+      ],
+      "score_kind": "points_or_goals",
+      "units": [
+        1,
+        0
+      ],
+      "checks": [
+        "basketball keys ignored",
+        "confirmed exchange and undo",
+        "Escape cancels lineup",
+        "attributed final point",
+        "confirmed closeout and restart"
+      ],
+      "reopened_capture": "badminton-reopened.jpg"
+    },
+    {
+      "id": "NATIVE-TABLE-TENNIS",
+      "sport": "table-tennis",
+      "match_id": 6,
+      "status": "passed",
+      "observed_score": [
+        3,
+        1
+      ],
+      "score_kind": "points_or_goals",
+      "units": [
+        1,
+        0
+      ],
+      "checks": [
+        "Escape cancels lineup and substitution",
+        "basketball keys ignored",
+        "attributed final point and undo",
+        "confirmed closeout and restart"
+      ],
+      "reopened_capture": "table-tennis-reopened.jpg"
+    },
+    {
+      "id": "NATIVE-FOOTBALL",
+      "sport": "football",
+      "match_id": 7,
+      "status": "passed",
+      "observed_score": [
+        2,
+        2
+      ],
+      "score_kind": "points_or_goals",
+      "units": null,
+      "checks": [
+        "Enter clock correction",
+        "text entry and basketball-key isolation",
+        "Escape cancels lineup",
+        "count-up start/pause",
+        "goal undo and own goal",
+        "confirmed draw and restart"
+      ],
+      "reopened_capture": "football-reopened.jpg"
+    },
+    {
+      "id": "NATIVE-FUTSAL",
+      "sport": "futsal",
+      "match_id": 8,
+      "status": "passed",
+      "observed_score": [
+        2,
+        1
+      ],
+      "score_kind": "points_or_goals",
+      "units": null,
+      "checks": [
+        "Enter clock correction",
+        "text entry and basketball-key isolation",
+        "Escape cancels lineup and result review",
+        "countdown start/pause",
+        "goal undo and period rollback",
+        "confirmed result and restart"
+      ],
+      "reopened_capture": "futsal-reopened.jpg"
+    }
+  ],
+  "shared_setup_checks": [
+    "Tab advances name/date/venue fields",
+    "Shift-Tab moves back without overwriting another field"
+  ]
+}

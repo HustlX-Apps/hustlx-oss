@@ -4,7 +4,7 @@
 
 Rust and Iced render the interface. SQLite stores reusable teams/players, memberships, named and dated matches, roster snapshots, and durable stat/undo events. Startup opens Matches with an empty library on first use. No sample records are inserted.
 
-Game and shot clocks use monotonic countdowns, transactional commands and paused restart recovery. Player profiles include optional jerseys and positions; supported v2 shortcuts work on Game Day. Starting lineups, confirmed substitutions and saved lineup history are available. Basketball timeouts and completion, full box scores, exports, and installers remain planned. The six set/rally sports have a separate local scoring, completion and reopened-result workflow. New matches start with empty courts and require explicit starter selection to put players on court; this is advisory and does not block other game-day actions. This is not ready to keep a real game's complete official record.
+Game and shot clocks use monotonic countdowns, transactional commands and paused restart recovery. Player profiles include optional jerseys and positions; supported v2 shortcuts work on Game Day. Starting lineups, confirmed substitutions and saved lineup history are available. Basketball timeouts and completion, full box scores, exports, and installers remain planned. The six set/rally sports have local scoring, participant actions, lineup/exchange, completion and reopened-result workflows. Football and Futsal add native field events, clocks, shootouts and draw-aware closeout. Volleyball adds six-position rotation and libero exchanges. New matches start with empty courts and require explicit starter selection to put players on court; this is advisory and does not block other game-day actions. This is not ready to keep a real game's complete official record.
 
 Stats now retain pre-action period/game/shot context across retry and reopen. The native feed shows saved timing; legacy rows explicitly show Time not recorded. See [event timing evidence](evidence/clock-stamped-events/README.md).
 
@@ -77,7 +77,7 @@ Integration tests use temporary databases for unknown identities, invalid dates,
 ## Structure
 
 - `src/lib.rs`: renderer-independent match/stat projections. Synthetic defaults support tests only.
-- `src/schema.sql`, `src/storage.rs`: schema version 5 with `src/migration_v2.sql` through `src/migration_v5.sql`, catalog operations, roster snapshots, transactional event commands and nullable pre-action timing.
+- `src/schema.sql`, `src/storage.rs`: schema version 6 with `src/migration_v2.sql` through `src/migration_v6.sql`, catalog operations, roster snapshots, transactional event commands and nullable pre-action timing.
 - `src/session.rs`: commit-before-display state and pending retries.
 - `src/brand.rs`: embedded wordmarks, Inter/Exo font roles, and light/dark palettes. See [branding](branding.md).
 - `src/main.rs`, `src/ui.rs`, `src/library_ui.rs`, `src/clock_ui.rs`, `src/lineup_ui.rs`: native entry point, Game Day console, and library forms.
@@ -105,3 +105,13 @@ See [desktop releases](releases.md). `cargo xtask version --bump patch --dry-run
 ## Multi-sport verification
 
 `tests/sports.rs` covers sport scoring and service boundaries; `tests/sport_storage.rs` covers durable journeys, replay corrections, revision/UUID integrity, migration and failed-write rollback. Native UI routing tests cover creation and basketball control isolation. Use the complete Cargo checks above before handoff. Exercise setup, scoring, undo, completion and restart in an isolated library and inspect both themes at 1100x760. The hosted API/Nuxt harness is not a substitute for these Rust tests and is not required when those repositories remain unchanged.
+
+## Sport UI port checks
+
+Run `python3 scripts/run_sport_harness.py` for local regression, all native App/controller regressions including nine E2E journeys with fresh-process restart, and 27 deterministic sport eval cases. It writes ignored JSON/log artifacts and fails on missing sports, empty/ignored tests, command failure or timeout. Select `--lane regression`, `--lane e2e` or `--lane eval` for focused work. See [coverage audit and harness](evidence/sport-ui-port/verification.md) for the coverage matrix, fixture format and native GUI limitations. The full checker includes these Rust suites and the Python harness contract tests.
+
+`tests/operators.rs` covers attributed outcomes, rotation, open exchanges and per-set reset; `tests/operator_storage.rs` covers roster snapshots and schema 5 preservation. `tests/field_sports.rs` covers field clock/event semantics, while `tests/field_session.rs` covers monotonic checkpoints, exact retry, interruption, completion and period undo, Futsal extra-time foul carryover and restart. Native App tests exercise all nine sport setup/render paths, confirmed volleyball exchanges and field closeout. Run the local checker after changes.
+
+Native smoke: use an isolated library, create roster-backed and named-side matches, verify volleyball Kill/Attack/Error, side-out rotation, lineup cancellation, confirmed substitution/libero, Undo and restart. For racquet sports inspect singles/doubles service, point labels and game/set strip; for Football/Futsal inspect clock direction, own goals, team/player attribution, paused next period, shootout and confirmed draw/decisive closeout. Keep the six volleyball positions visible at 1100x760, and inspect both themes. See [port evidence](evidence/sport-ui-port/README.md).
+
+The [native keyboard/UI audit](evidence/native-sport-e2e/README.md) records real macOS key and pointer input for all nine sports, scoring/undo/closeout and full-app restart. Its five fixes have controller regression coverage and focused native input evidence. The Python harness runs App/controller tests alongside its nine mandatory E2E journeys; the recorded native GUI lane remains separate.

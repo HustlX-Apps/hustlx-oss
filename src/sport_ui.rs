@@ -1,6 +1,8 @@
 use super::*;
+#[cfg(test)]
+use hustlx_oss::sport::{Command, Status};
 use hustlx_oss::{
-    sport::{Command, Format, Rules, Scoring, Sport, Status},
+    sport::{Format, Rules, Scoring, Sport},
     storage::{Error, Result},
 };
 use iced::widget::{checkbox, column, pick_list, text_input};
@@ -45,7 +47,11 @@ impl SportSetup {
             home: String::new(),
             away: String::new(),
             best_of: r.best_of.to_string(),
-            target: r.target.to_string(),
+            target: if sport.field() {
+                r.period_minutes.to_string()
+            } else {
+                r.target.to_string()
+            },
             decider: r.decider_target.to_string(),
             win_by: r.win_by.to_string(),
             cap: r.cap.map_or_else(String::new, |n| n.to_string()),
@@ -80,6 +86,11 @@ impl SportSetup {
             tiebreak_target: number(&self.tiebreak, "Tiebreak target")?,
             match_tiebreak: self.match_tiebreak,
             first_server: self.first_server,
+            period_minutes: if self.sport.field() {
+                number(&self.target, "Period minutes")?
+            } else {
+                0
+            },
         })
     }
 }
@@ -145,6 +156,10 @@ impl App {
             text("Match rules").size(17).font(HEADING),
         ]
         .spacing(14);
+        if f.sport.field() {
+            return form.push(input("Minutes per regulation period","20",&f.target,RuleField::Target,c))
+                .push(text("Two regulation periods. Extra time and shootout can be selected during the match. Local rules are advisory.").size(12).color(c.muted)).into();
+        }
         if !matches!(f.sport, Sport::Volleyball | Sport::Padel) {
             form = form.push(
                 column![
@@ -271,358 +286,10 @@ impl App {
         form.into()
     }
     pub(super) fn sport_view(&self, c: Colors) -> Element<'_, Message> {
-        let saved = self.active().expect("sport console requires a match");
-        let state = saved
-            .sport_state
-            .as_ref()
-            .expect("sport console requires sport state");
-        let rules = state.rules();
-        let live = state.status == Status::Live && !self.pending();
-        let racquet_games = matches!(state.sport, Sport::Tennis | Sport::Padel);
-        let unit = if state.sport == Sport::Volleyball || racquet_games {
-            "Set"
-        } else {
-            "Game"
-        };
-        let side_name = |side| {
-            if side == Side::Home {
-                &saved.summary.home_name
-            } else {
-                &saved.summary.away_name
-            }
-        };
-        let status = match state.status {
-            Status::Live => format!(
-                "{unit} {}{}",
-                state.unit_number,
-                if state.tiebreak { " / TIEBREAK" } else { "" }
-            ),
-            Status::Decided => "Result ready to save".into(),
-            Status::Completed => "COMPLETED / RESULT SAVED".into(),
-        };
-        let mut header = column![
-            row![
-                column![
-                    text(&saved.summary.name).size(22).font(HEADING),
-                    text(format!(
-                        "{} / {} / {}",
-                        state.sport.label(),
-                        saved.summary.date,
-                        if saved.summary.venue.is_empty() {
-                            "Venue not set"
-                        } else {
-                            &saved.summary.venue
-                        }
-                    ))
-                    .size(12)
-                    .color(c.muted)
-                ]
-                .spacing(5)
-                .width(Fill),
-                badge("LOCAL MATCH", c.green, c)
-            ]
-            .spacing(14),
-            row![
-                self.sport_score(Side::Home, c),
-                column![
-                    text(status).size(13).font(BOLD).color(c.muted),
-                    text(format!("{} : {}", state.units[0], state.units[1]))
-                        .size(38)
-                        .font(DISPLAY),
-                    text(if unit == "Set" { "SETS" } else { "GAMES" })
-                        .size(10)
-                        .color(c.muted)
-                ]
-                .spacing(7)
-                .align_x(alignment::Horizontal::Center)
-                .width(Length::FillPortion(2)),
-                self.sport_score(Side::Away, c)
-            ]
-            .spacing(18)
-            .align_y(alignment::Vertical::Center),
-        ]
-        .spacing(18);
-        if let Some(winner) = state.winner {
-            header = header.push(
-                text(format!("Winner: {}", side_name(winner)))
-                    .size(18)
-                    .font(HEADING)
-                    .color(c.green),
-            );
-        }
-        if state.status == Status::Live {
-            header = header.push(
-                text(format!(
-                    "SERVING: {}{}",
-                    side_name(state.server),
-                    if state.sport == Sport::Pickleball
-                        && rules.scoring == Scoring::SideOut
-                        && rules.format == Format::Doubles
-                    {
-                        format!(" / server {} of 2", state.server_number)
-                    } else {
-                        String::new()
-                    }
-                ))
-                .size(13)
-                .font(SEMIBOLD)
-                .color(if state.server == Side::Home {
-                    c.home
-                } else {
-                    c.away
-                }),
-            );
-            if state.sport != Sport::Volleyball && rules.format == Format::Doubles {
-                header = header.push(text(format!(
-                    "Serving partner {} / receiving partner {}. Partner numbers follow the starting order on each side.",
-                    state.server_slot, state.receiver_slot
-                )).size(12).color(c.muted));
-            }
-        }
-        let mut controls = column![
-            text(
-                if state.sport == Sport::Pickleball && rules.scoring == Scoring::SideOut {
-                    "Record the rally winner. Only the serving side scores a point."
-                } else {
-                    "Record the point winner."
-                }
-            )
-            .size(12)
-            .color(c.muted),
-            row![
-                button(
-                    text(format!(
-                        "{} wins {}",
-                        saved.summary.home_name,
-                        if rules.scoring == Scoring::SideOut {
-                            "rally"
-                        } else {
-                            "point"
-                        }
-                    ))
-                    .size(17)
-                    .font(SEMIBOLD)
-                )
-                .padding([18, 14])
-                .width(Fill)
-                .on_press_maybe(live.then_some(Message::SportCommand(Command::Rally(Side::Home)))),
-                button(
-                    text(format!(
-                        "{} wins {}",
-                        saved.summary.away_name,
-                        if rules.scoring == Scoring::SideOut {
-                            "rally"
-                        } else {
-                            "point"
-                        }
-                    ))
-                    .size(17)
-                    .font(SEMIBOLD)
-                )
-                .padding([18, 14])
-                .width(Fill)
-                .on_press_maybe(live.then_some(Message::SportCommand(Command::Rally(Side::Away)))),
-            ]
-            .spacing(12),
-            row![
-                button("Serve: Side A")
-                    .style(brand::secondary)
-                    .on_press_maybe(
-                        live.then_some(Message::SportCommand(Command::SetServer(Side::Home)))
-                    ),
-                button("Serve: Side B")
-                    .style(brand::secondary)
-                    .on_press_maybe(
-                        live.then_some(Message::SportCommand(Command::SetServer(Side::Away)))
-                    ),
-                Space::new().width(Fill),
-                button("Undo last action")
-                    .style(brand::secondary)
-                    .on_press_maybe(
-                        (!self.pending()
-                            && saved
-                                .sport_history
-                                .iter()
-                                .any(|e| e.command.is_some() && !e.undone))
-                        .then_some(Message::Undo)
-                    ),
-            ]
-            .spacing(10),
-        ]
-        .spacing(12);
-        if state.status == Status::Decided {
-            controls = controls.push(
-                row![
-                    text(
-                        "The winning score is saved. Complete the match to save its final result."
-                    )
-                    .size(13)
-                    .width(Fill),
-                    button("Complete match & save result")
-                        .padding([12, 16])
-                        .on_press_maybe(
-                            (!self.pending()).then_some(Message::SportCommand(Command::Complete))
-                        )
-                ]
-                .spacing(12),
-            );
-        } else if state.status == Status::Completed {
-            controls = controls.push(text("The result is saved on this computer. Undo reopens the match if a correction is needed.").size(13).color(c.green));
-        }
-        let mut units = column![text(format!("{unit} scores")).size(17).font(HEADING)].spacing(9);
-        if state.completed_units.is_empty() {
-            units = units.push(
-                text(format!("No completed {} yet.", unit.to_lowercase()))
-                    .size(12)
-                    .color(c.muted),
-            );
-        }
-        for (index, score) in state.completed_units.iter().enumerate() {
-            let value = if score.score == [0, 0] {
-                score.tiebreak_points.unwrap_or(score.score)
-            } else {
-                score.score
-            };
-            let extra = if score.score != [0, 0] {
-                score
-                    .tiebreak_points
-                    .map_or_else(String::new, |p| format!(" (TB {} - {})", p[0], p[1]))
-            } else {
-                " (match tiebreak)".into()
-            };
-            units = units.push(
-                text(format!(
-                    "{unit} {} / {} - {}{}",
-                    index + 1,
-                    value[0],
-                    value[1],
-                    extra
-                ))
-                .size(13),
-            );
-        }
-        if state.status == Status::Live && racquet_games {
-            units = units.push(
-                text(format!(
-                    "Current set games: {} - {}",
-                    state.games[0], state.games[1]
-                ))
-                .size(14)
-                .font(SEMIBOLD),
-            );
-        }
-        let mut settings = format!(
-            "{} / {} / best of {} / target {}",
-            state.sport.label(),
-            rules.scoring,
-            rules.best_of,
-            rules.target
-        );
-        if state.sport != Sport::Volleyball {
-            settings.push_str(&format!(" / {}", rules.format));
-        }
-        if racquet_games {
-            settings.push_str(&format!(" / tiebreak to {}", rules.tiebreak_target));
-            if rules.match_tiebreak {
-                settings.push_str(&format!(
-                    " / deciding match tiebreak to {}",
-                    rules.decider_target
-                ));
-            }
-        } else {
-            settings.push_str(&format!(
-                " / decider {} / win by {} / cap {}",
-                rules.decider_target,
-                rules.win_by,
-                rules.cap.map_or_else(|| "none".into(), |n| n.to_string())
-            ));
-        }
-        settings.push_str(&format!(
-            " / first server: {}",
-            side_name(rules.first_server)
-        ));
-        let mut history = column![
-            text("Saved match history").size(17).font(HEADING),
-            text("Undo keeps the original event and adds a correction to this history.")
-                .size(12)
-                .color(c.muted)
-        ]
-        .spacing(9);
-        if saved.sport_history.is_empty() {
-            history = history.push(text("Ready for the first point.").size(13).color(c.muted));
-        }
-        for event in saved.sport_history.iter().rev() {
-            history = history.push(
-                text(format!(
-                    "#{}  {}{}",
-                    event.id,
-                    event.label(),
-                    if event.undone { " / UNDONE" } else { "" }
-                ))
-                .size(13)
-                .color(if event.undone { c.muted } else { c.text }),
-            );
-        }
-        scrollable(
-            column![
-                card(header, c).padding(20).width(Fill),
-                card(controls, c).width(Fill),
-                row![
-                    card(units, c).width(Fill),
-                    card(
-                        column![
-                            text("Saved rules").size(17).font(HEADING),
-                            text(settings).size(12).color(c.muted),
-                            text(format!("Ends changed {} times", state.ends_changed))
-                                .size(12)
-                                .color(c.muted)
-                        ]
-                        .spacing(10),
-                        c
-                    )
-                    .width(Fill)
-                ]
-                .spacing(14),
-                card(history, c).width(Fill),
-            ]
-            .spacing(14)
-            .width(Fill),
-        )
-        .height(Fill)
-        .spacing(8)
-        .into()
-    }
-    fn sport_score(&self, side: Side, c: Colors) -> Element<'_, Message> {
-        let saved = self.active().unwrap();
-        let state = saved.sport_state.as_ref().unwrap();
-        let accent = if side == Side::Home { c.home } else { c.away };
-        let name = if side == Side::Home {
-            &saved.summary.home_name
-        } else {
-            &saved.summary.away_name
-        };
-        column![
-            text(if side == Side::Home {
-                "SIDE A / HOME"
-            } else {
-                "SIDE B / AWAY"
-            })
-            .size(10)
-            .font(BOLD)
-            .color(accent),
-            text(name).size(22).font(HEADING).color(accent),
-            text(state.point_label(side)).size(68).font(DISPLAY),
-        ]
-        .spacing(6)
-        .width(Length::FillPortion(3))
-        .align_x(if side == Side::Home {
-            alignment::Horizontal::Left
-        } else {
-            alignment::Horizontal::Right
-        })
-        .into()
+        self.operator_view(c)
     }
 }
+
 fn input<'a>(
     label: &'a str,
     placeholder: &str,
@@ -671,7 +338,10 @@ mod tests {
     #[test]
     fn all_six_native_flows_create_score_undo_complete_and_reopen() {
         let mut app = app(Store::open(":memory:").unwrap());
-        for sport in Sport::ALL.into_iter().filter(|s| *s != Sport::Basketball) {
+        for sport in Sport::ALL
+            .into_iter()
+            .filter(|s| *s != Sport::Basketball && !s.field())
+        {
             create(&mut app, sport);
             assert_eq!(app.screen, Screen::GameDay);
             assert!(app.is_sport_match());
@@ -818,6 +488,35 @@ mod tests {
         }
         send(&mut app, Message::ToggleClock);
         assert!(!app.active().unwrap().clock.running);
+    }
+    #[test]
+    fn tab_and_shift_tab_request_focus_operations_but_guard_modified_or_captured_keys() {
+        let mut app = app(Store::open(":memory:").unwrap());
+        for key in ["Tab", "Shift+Tab"] {
+            let task = app.update(Message::Key {
+                key: key.into(),
+                repeat: false,
+                modified: false,
+                captured: false,
+            });
+            assert!(
+                task.units() > 0,
+                "{key} must request a widget focus operation"
+            );
+            for (repeat, modified, captured) in [
+                (true, false, false),
+                (false, true, false),
+                (false, false, true),
+            ] {
+                let task = app.update(Message::Key {
+                    key: key.into(),
+                    repeat,
+                    modified,
+                    captured,
+                });
+                assert_eq!(task.units(), 0);
+            }
+        }
     }
 
     #[test]

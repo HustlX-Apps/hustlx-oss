@@ -4,7 +4,7 @@ Recorded October 16, 2026. This captures the initial product request, not shippe
 
 ## Confirmed direction
 
-HustlX OSS uses Rust throughout its interface and domain logic. The user confirmed Rust-rendered UI on October 16, 2026; Iced is the initial rendering toolkit. It is a desktop Game Day application for Windows and macOS. On October 20, 2026, the approved scope expanded to Volleyball, Pickleball, Table Tennis, Tennis (also called Long Tennis), Badminton and Padel. Follow the existing web Game Day v2 UI as closely as practical. Document decisions, behavior, setup, and verification as the project develops.
+HustlX OSS uses Rust throughout its interface and domain logic. The user confirmed Rust-rendered UI on October 16, 2026; Iced is the initial rendering toolkit. It is a desktop Game Day application for Windows and macOS. On October 20, 2026, the approved scope expanded to Volleyball, Pickleball, Table Tennis, Tennis (also called Long Tennis), Badminton and Padel. On October 21, 2026, the user approved the current web UI port for all seven existing sports plus local Football and Futsal. Swimming and Taekwondo desks remain excluded. Follow the existing web Game Day UI as closely as practical. Document decisions, behavior, setup, and verification as the project develops.
 
 The local product contains teams, players, and matches. A league, season, bracket, standings system, online account, or hosted backend is not required to run a game.
 
@@ -31,7 +31,7 @@ The local product contains teams, players, and matches. A league, season, bracke
 
 Optional syncing to an eligible paid HustlX league comes later. Entitlement validation, account linking, match mapping, conflict resolution, and the server contract are not designed or implemented yet. Do not invent API routes or copy server assumptions into the desktop product.
 
-League management, payments, livestreaming, simultaneous multi-device operation, advanced player statistics for the six new sports and complete web-console parity remain outside this slice.
+League management, payments, livestreaming, simultaneous multi-device operation, complete statistical reports and full hosted workflow parity remain outside this slice. Native player event counts, volleyball rotation/exchanges and local Football/Futsal operation are implemented in the October 21 port.
 
 ## License decision
 

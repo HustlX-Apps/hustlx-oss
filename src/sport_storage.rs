@@ -27,9 +27,44 @@ impl SportEvent {
             Side::Away => "B",
         };
         match self.command {
+            Some(Command::Field(command)) => field_label(command),
+            Some(Command::FieldAt {
+                clock_ms, command, ..
+            }) => format!(
+                "{} / {}",
+                crate::clock::format_game(clock_ms),
+                field_label(command)
+            ),
             Some(Command::Rally(side)) => format!("Rally won by {}", side_name(side)),
             Some(Command::SetServer(side)) => format!("Server corrected to {}", side_name(side)),
             Some(Command::Complete) => "Match completed".into(),
+            Some(Command::Player {
+                side,
+                player,
+                action,
+            }) => format!(
+                "{} / {}{}",
+                side_name(side),
+                action.label(),
+                player.map_or_else(String::new, |id| format!(" / player #{id}"))
+            ),
+            Some(Command::Lineup { side, .. }) => format!("{} lineup saved", side_name(side)),
+            Some(Command::Exchange {
+                side,
+                outgoing,
+                incoming,
+                libero,
+            }) => format!(
+                "{} {} / #{outgoing} > #{incoming}",
+                side_name(side),
+                if libero {
+                    "libero exchange"
+                } else {
+                    "substitution"
+                }
+            ),
+            Some(Command::Rotate(side)) => format!("{} rotated", side_name(side)),
+            Some(Command::Timeout(side)) => format!("{} timeout", side_name(side)),
             None => format!("Undo action #{}", self.target_id.unwrap_or_default()),
         }
     }
@@ -37,6 +72,13 @@ impl SportEvent {
 
 impl Store {
     pub fn create_sport_match(&mut self, draft: &SportMatchDraft) -> Result<SavedMatch> {
+        self.create_sport_match_with_teams(draft, [None, None])
+    }
+    pub fn create_sport_match_with_teams(
+        &mut self,
+        draft: &SportMatchDraft,
+        teams: [Option<i64>; 2],
+    ) -> Result<SavedMatch> {
         State::new(draft.sport, draft.rules.clone()).map_err(engine_error)?;
         let name = required(&draft.name, "Match name", 200)?;
         let date = draft.date.trim();
@@ -61,6 +103,14 @@ impl Store {
         // Retained for structural compatibility; sport commands never run these clocks.
         tx.execute("INSERT INTO match_clocks(match_id) VALUES(?1)", [id])?;
         tx.execute("INSERT INTO sport_matches(match_id,local_id,rules_version,rules_json) VALUES(?1,?2,1,?3)", params![id,Uuid::new_v4().to_string(),rules])?;
+        for (side, team) in [("home", teams[0]), ("away", teams[1])] {
+            if let Some(team) = team {
+                active_name(&tx, "teams", team)?;
+                for (order, p) in roster(&tx, team)?.into_iter().enumerate() {
+                    tx.execute("INSERT INTO match_players(match_id,side,player_id,name,jersey,on_court,sort_order,positions) VALUES(?1,?2,?3,?4,?5,0,?6,?7)",params![id,side,p.player_id,p.name,p.jersey,order as i64,profile::encode(&p.positions)])?;
+                }
+            }
+        }
         let saved = load(&tx, id)?;
         tx.commit()?;
         Ok(saved)
@@ -92,6 +142,7 @@ impl Store {
         if current.summary.revision != revision {
             return Err(Error::Conflict);
         }
+        validate_actors(&current, command)?;
         let mut state = current.sport_state.ok_or_else(|| {
             Error::Validation("Use the basketball controls for this match.".into())
         })?;
@@ -123,7 +174,21 @@ impl Store {
         if current.sport_state.is_none() {
             return invalid("Use the basketball undo control for this match.");
         }
-        let target = tx.query_row("SELECT e.id FROM sport_events e WHERE e.match_id=?1 AND e.kind='record' AND NOT EXISTS(SELECT 1 FROM sport_events u WHERE u.target_id=e.id) ORDER BY e.id DESC LIMIT 1", [id], |r| r.get::<_,i64>(0)).optional()?;
+        let target = {
+            let mut statement=tx.prepare("SELECT e.id,e.payload FROM sport_events e WHERE e.match_id=?1 AND e.kind='record' AND NOT EXISTS(SELECT 1 FROM sport_events u WHERE u.target_id=e.id) ORDER BY e.id DESC")?;
+            let mut target = None;
+            for row in
+                statement.query_map([id], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?
+            {
+                let (event, payload) = row?;
+                let command: Command = serde_json::from_str(&payload).map_err(json_error)?;
+                if undoable(command) {
+                    target = Some(event);
+                    break;
+                }
+            }
+            target
+        };
         let Some(target) = target else {
             return invalid("There is no sport action to undo.");
         };
@@ -176,7 +241,10 @@ pub(super) fn projection(
             r.get::<_, bool>(5)?,
         ))
     })?;
-    let mut events = vec![];
+    let mut events: Vec<SportEvent> = vec![];
+    // Track the period that existed when each receipt was written, including
+    // advances later undone. A clock observation belongs only to that period.
+    let mut recorded_period = 1;
     for row in rows {
         let (event_id, version, kind, payload, target_id, undone) = row?;
         if version != 1 {
@@ -196,10 +264,34 @@ pub(super) fn projection(
             "undo" => None,
             _ => return invalid("Unsupported saved sport action."),
         };
-        if let Some(command) = command
-            && !undone
-        {
-            state.apply(command).map_err(engine_error)?;
+        let same_period = state
+            .field
+            .as_ref()
+            .is_none_or(|field| field.period == recorded_period);
+        if let Some(command) = command {
+            if !undone && same_period {
+                state.apply(command).map_err(engine_error)?;
+            } else if undone
+                && same_period
+                && let Command::FieldAt { clock_ms, .. } = command
+            {
+                // Undo retracts the domain action, not the time observed before it.
+                state
+                    .apply(Command::Field(
+                        crate::field_sport::FieldCommand::Checkpoint {
+                            clock_ms,
+                            running: false,
+                        },
+                    ))
+                    .map_err(engine_error)?;
+            }
+            if advances_field_period(command) {
+                recorded_period += 1;
+            }
+        } else if events.iter().any(|event| {
+            Some(event.id) == target_id && event.command.is_some_and(advances_field_period)
+        }) {
+            recorded_period -= 1;
         }
         events.push(SportEvent {
             id: event_id,
@@ -211,6 +303,17 @@ pub(super) fn projection(
     Ok((Some(state), events))
 }
 
+fn advances_field_period(command: Command) -> bool {
+    matches!(
+        command,
+        Command::Field(crate::field_sport::FieldCommand::NextPeriod)
+            | Command::FieldAt {
+                command: crate::field_sport::FieldCommand::NextPeriod,
+                ..
+            }
+    )
+}
+
 fn receipt(db: &Connection, command: Uuid) -> Result<Option<(i64, String, Option<String>)>> {
     Ok(db
         .query_row(
@@ -219,6 +322,65 @@ fn receipt(db: &Connection, command: Uuid) -> Result<Option<(i64, String, Option
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .optional()?)
+}
+
+fn validate_actors(saved: &SavedMatch, command: Command) -> Result<()> {
+    let member = |side: Side, player: i64| -> Result<()> {
+        if saved.game.player(side, player).is_some() {
+            Ok(())
+        } else {
+            invalid("This player is not in this side's saved match roster.")
+        }
+    };
+    match command {
+        Command::Player {
+            side,
+            player: Some(player),
+            ..
+        }
+        | Command::Field(crate::field_sport::FieldCommand::Event {
+            side,
+            player: Some(player),
+            ..
+        })
+        | Command::FieldAt {
+            command:
+                crate::field_sport::FieldCommand::Event {
+                    side,
+                    player: Some(player),
+                    ..
+                },
+            ..
+        } => member(side, player)?,
+        Command::Lineup { side, players } => {
+            for player in players.into_iter().filter(|p| *p != 0) {
+                member(side, player)?;
+            }
+        }
+        Command::Exchange {
+            side,
+            outgoing,
+            incoming,
+            ..
+        } => {
+            member(side, outgoing)?;
+            member(side, incoming)?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+pub fn undoable(command: Command) -> bool {
+    use crate::field_sport::FieldCommand as F;
+    !matches!(
+        command,
+        Command::Field(F::Start | F::Pause | F::SetTime(_) | F::Checkpoint { .. })
+            | Command::FieldAt {
+                command: F::Start | F::Pause | F::SetTime(_) | F::Checkpoint { .. },
+                ..
+            }
+    )
 }
 
 pub(super) fn command_available(db: &Connection, command: Uuid) -> Result<()> {
@@ -246,4 +408,21 @@ fn json_error(_error: serde_json::Error) -> Error {
     Error::Validation(
         "Invalid saved sport data. Preserve this library and use a compatible app version.".into(),
     )
+}
+
+fn field_label(command: crate::field_sport::FieldCommand) -> String {
+    use crate::field_sport::FieldCommand as F;
+    match command {
+        F::Start => "Clock started".into(),
+        F::Pause => "Clock paused".into(),
+        F::SetTime(ms) => format!("Clock corrected to {}", crate::clock::format_game(ms)),
+        F::Checkpoint { .. } => "Clock saved".into(),
+        F::NextPeriod => "Next period".into(),
+        F::Complete => "Match completed".into(),
+        F::Event { side, kind, .. } => format!(
+            "{} / {}",
+            if side == Side::Home { "Home" } else { "Away" },
+            kind.label()
+        ),
+    }
 }

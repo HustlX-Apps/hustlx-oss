@@ -23,7 +23,10 @@ fn draft(sport: Sport) -> SportMatchDraft {
 
 #[test]
 fn all_six_sports_score_finish_undo_and_reopen_with_original_rules() {
-    for sport in Sport::ALL.into_iter().filter(|s| *s != Sport::Basketball) {
+    for sport in Sport::ALL
+        .into_iter()
+        .filter(|s| *s != Sport::Basketball && !s.field())
+    {
         let dir = tempdir().unwrap();
         let path = dir.path().join("match.sqlite3");
         let mut db = Store::open(&path).unwrap();

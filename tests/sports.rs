@@ -174,7 +174,10 @@ fn padel_star_point_and_match_tiebreak() {
 
 #[test]
 fn rules_validation_early_complete_and_serialized_replay_are_deterministic() {
-    for sport in Sport::ALL.into_iter().filter(|s| *s != Sport::Basketball) {
+    for sport in Sport::ALL
+        .into_iter()
+        .filter(|s| *s != Sport::Basketball && !s.field())
+    {
         let mut s = state(sport);
         assert!(s.apply(Command::Complete).is_err());
         let commands = [
@@ -230,7 +233,10 @@ fn badminton_doubles_keeps_winning_server_and_parity_after_service_loss() {
 
 #[test]
 fn undo_by_replay_restores_every_sport_before_final_point() {
-    for sport in Sport::ALL.into_iter().filter(|s| *s != Sport::Basketball) {
+    for sport in Sport::ALL
+        .into_iter()
+        .filter(|s| *s != Sport::Basketball && !s.field())
+    {
         let mut s = state(sport);
         let mut events = Vec::new();
         while s.status == Status::Live {
