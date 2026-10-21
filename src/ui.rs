@@ -804,8 +804,8 @@ fn card<'a>(content: impl Into<Element<'a, Message>>, c: Colors) -> Container<'a
     })
 }
 
-fn badge<'a>(label: &'a str, accent: Color, c: Colors) -> Element<'a, Message> {
-    container(text(label).size(10).font(BOLD).color(accent))
+fn badge<'a>(label: impl Into<String>, accent: Color, c: Colors) -> Element<'a, Message> {
+    container(text(label.into()).size(10).font(BOLD).color(accent))
         .padding([6, 10])
         .style(move |_| {
             container::Style::default()

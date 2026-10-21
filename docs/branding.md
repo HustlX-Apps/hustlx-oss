@@ -24,6 +24,14 @@ The palette follows the web `app/assets/css/tokens.css`, `app/theme.ts`, and `ta
 
 `src/brand.rs` owns fonts, colors, native theme palettes, wordmark selection, and neutral button styling. Keep these centralized when expanding the application. Launcher icons, signed bundles, and installer identity remain part of the packaging slice.
 
+## Library layout
+
+Teams uses a fixed 340px sidebar and a flexible roster panel. Creation and roster fields stay visible while each list scrolls independently. Selected teams use a tinted surface and border; secondary row actions use the neutral button style.
+
+Jersey labels may contain up to 12 characters, including letters. Never render them as large text in a narrow fixed-width slot without wrapping: Iced can paint them over adjacent player names. Use a contained badge, reduce the type size for long labels, and wrap words or glyphs. Team and player names also need glyph fallback for unbroken names.
+
 ## Visual evidence
 
 [Current native screenshots and checks](evidence/hustlx-branding/README.md). Older screenshots under native-preview and sqlite-library document their historical implementation states.
+
+[Teams layout and long-label verification](evidence/teams-ui/README.md) records the October 21 native presentation update.
