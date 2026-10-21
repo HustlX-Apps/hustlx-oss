@@ -14,6 +14,9 @@ use iced::{Border, Color, Element, Fill, Length, Theme, alignment};
 use std::{collections::BTreeMap, time::Instant};
 #[path = "clock_ui.rs"]
 mod clocks;
+#[cfg(test)]
+#[path = "sport_e2e.rs"]
+mod e2e;
 #[path = "field_ui.rs"]
 mod fields;
 #[path = "library_ui.rs"]

@@ -1,0 +1,1714 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "basketball-attributed-score-undo",
+      "sport": "basketball",
+      "steps": [
+        {
+          "command": {
+            "side": "home",
+            "player": 1,
+            "stat": "three_made"
+          },
+          "expect": {
+            "/score": [
+              3,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "side": "away",
+            "player": 2,
+            "stat": "two_made"
+          },
+          "expect": {
+            "/score": [
+              3,
+              2
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/score": [
+              3,
+              0
+            ],
+            "/plays": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "basketball-wrong-side-atomic",
+      "sport": "basketball",
+      "steps": [
+        {
+          "command": {
+            "side": "home",
+            "player": 2,
+            "stat": "three_made"
+          },
+          "expect": {
+            "/score": [
+              0,
+              0
+            ],
+            "/revision": 0
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "volleyball-attribution-undo",
+      "sport": "volleyball",
+      "steps": [
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Kill"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Kill"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              2,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 2,
+              "action": "Kill"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "volleyball-unsupported-and-early-result",
+      "sport": "volleyball",
+      "steps": [
+        {
+          "command": "complete",
+          "expect": {
+            "/state/status": "live"
+          },
+          "reject": true
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              0
+            ],
+            "/revision": 0
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "pickleball-attribution-undo",
+      "sport": "pickleball",
+      "steps": [
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              2,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 2,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "pickleball-unsupported-and-early-result",
+      "sport": "pickleball",
+      "steps": [
+        {
+          "command": "complete",
+          "expect": {
+            "/state/status": "live"
+          },
+          "reject": true
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Kill"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              0
+            ],
+            "/revision": 0
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "tennis-attribution-undo",
+      "sport": "tennis",
+      "steps": [
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              2,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 2,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "tennis-unsupported-and-early-result",
+      "sport": "tennis",
+      "steps": [
+        {
+          "command": "complete",
+          "expect": {
+            "/state/status": "live"
+          },
+          "reject": true
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Kill"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              0
+            ],
+            "/revision": 0
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "padel-attribution-undo",
+      "sport": "padel",
+      "steps": [
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              2,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 2,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "padel-unsupported-and-early-result",
+      "sport": "padel",
+      "steps": [
+        {
+          "command": "complete",
+          "expect": {
+            "/state/status": "live"
+          },
+          "reject": true
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Kill"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              0
+            ],
+            "/revision": 0
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "badminton-attribution-undo",
+      "sport": "badminton",
+      "steps": [
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              2,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 2,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "badminton-unsupported-and-early-result",
+      "sport": "badminton",
+      "steps": [
+        {
+          "command": "complete",
+          "expect": {
+            "/state/status": "live"
+          },
+          "reject": true
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Kill"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              0
+            ],
+            "/revision": 0
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "table_tennis-attribution-undo",
+      "sport": "table_tennis",
+      "steps": [
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              2,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 2,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              0
+            ]
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "table_tennis-unsupported-and-early-result",
+      "sport": "table_tennis",
+      "steps": [
+        {
+          "command": "complete",
+          "expect": {
+            "/state/status": "live"
+          },
+          "reject": true
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Kill"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              0
+            ],
+            "/revision": 0
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "volleyball-set-closeout-undo",
+      "sport": "volleyball",
+      "steps": [
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Kill"
+            }
+          },
+          "expect": {
+            "/state/status": "decided",
+            "/state/units": [
+              1,
+              0
+            ]
+          },
+          "repeat": 2
+        },
+        {
+          "command": "complete",
+          "expect": {
+            "/state/status": "completed",
+            "/state/winner": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          },
+          "expect": {
+            "/state/points": [
+              2,
+              0
+            ]
+          },
+          "reject": true
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/status": "decided"
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/status": "live",
+            "/state/points": [
+              1,
+              0
+            ]
+          }
+        }
+      ],
+      "rules": {
+        "best_of": 1,
+        "target": 2,
+        "decider_target": 2
+      }
+    },
+    {
+      "id": "pickleball-sideout-is-not-a-point",
+      "sport": "pickleball",
+      "steps": [
+        {
+          "command": {
+            "player": {
+              "side": "away",
+              "player": 2,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              0
+            ],
+            "/state/server": "away",
+            "/state/server_number": 1
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "UnforcedError"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              0
+            ],
+            "/state/server": "away",
+            "/state/server_number": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "tennis-double-fault-deuce-undo",
+      "sport": "tennis",
+      "steps": [
+        {
+          "command": {
+            "rally": "home"
+          },
+          "repeat": 3
+        },
+        {
+          "command": {
+            "rally": "away"
+          },
+          "expect": {
+            "/state/points": [
+              3,
+              3
+            ]
+          },
+          "repeat": 3
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "DoubleFault"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              3,
+              4
+            ]
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "DoubleFault"
+            }
+          },
+          "expect": {
+            "/state/games": [
+              0,
+              1
+            ],
+            "/state/points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/games": [
+              0,
+              0
+            ],
+            "/state/points": [
+              3,
+              4
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "padel-double-fault-deuce-undo",
+      "sport": "padel",
+      "steps": [
+        {
+          "command": {
+            "rally": "home"
+          },
+          "repeat": 3
+        },
+        {
+          "command": {
+            "rally": "away"
+          },
+          "expect": {
+            "/state/points": [
+              3,
+              3
+            ]
+          },
+          "repeat": 3
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "DoubleFault"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              3,
+              4
+            ]
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "DoubleFault"
+            }
+          },
+          "expect": {
+            "/state/games": [
+              0,
+              1
+            ],
+            "/state/points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/games": [
+              0,
+              0
+            ],
+            "/state/points": [
+              3,
+              4
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "table-tennis-deuce-service-and-unit-undo",
+      "sport": "table_tennis",
+      "steps": [
+        {
+          "command": {
+            "rally": "home"
+          },
+          "repeat": 10
+        },
+        {
+          "command": {
+            "rally": "away"
+          },
+          "repeat": 10
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/points": [
+              11,
+              10
+            ],
+            "/state/server": "away"
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "home",
+              "player": 1,
+              "action": "Winner"
+            }
+          },
+          "expect": {
+            "/state/units": [
+              1,
+              0
+            ],
+            "/state/points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/points": [
+              11,
+              10
+            ],
+            "/state/units": [
+              0,
+              0
+            ],
+            "/state/server": "away"
+          }
+        }
+      ]
+    },
+    {
+      "id": "badminton-cap-error-and-undo",
+      "sport": "badminton",
+      "steps": [
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "rally": "home"
+          }
+        },
+        {
+          "command": {
+            "rally": "away"
+          }
+        },
+        {
+          "command": {
+            "player": {
+              "side": "away",
+              "player": 2,
+              "action": "ServiceError"
+            }
+          },
+          "expect": {
+            "/state/completed_units/0/score": [
+              30,
+              29
+            ],
+            "/state/points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/points": [
+              29,
+              29
+            ],
+            "/state/units": [
+              0,
+              0
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "football-own-goal-and-undo",
+      "sport": "football",
+      "steps": [
+        {
+          "command": {
+            "field": {
+              "event": {
+                "side": "home",
+                "kind": "own_goal",
+                "player": 1
+              }
+            }
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "field": {
+              "event": {
+                "side": "home",
+                "kind": "shootout_goal",
+                "player": 1
+              }
+            }
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              0
+            ]
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "football-period-clock-undo",
+      "sport": "football",
+      "steps": [
+        {
+          "command": {
+            "field": {
+              "set_time": 10000
+            }
+          }
+        },
+        {
+          "command": {
+            "field": "next_period"
+          }
+        },
+        {
+          "command": {
+            "field": {
+              "set_time": 5000
+            }
+          },
+          "expect": {
+            "/state/field/period": 2
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/field/period": 1,
+            "/state/field/clock_ms": 10000,
+            "/state/field/running": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "football-shootout-separate-closeout",
+      "sport": "football",
+      "steps": [
+        {
+          "command": {
+            "field": {
+              "event": {
+                "side": "home",
+                "kind": "goal",
+                "player": 1
+              }
+            }
+          }
+        },
+        {
+          "command": {
+            "field": {
+              "event": {
+                "side": "home",
+                "kind": "own_goal",
+                "player": 1
+              }
+            }
+          }
+        },
+        {
+          "command": {
+            "field": "next_period"
+          },
+          "repeat": 4
+        },
+        {
+          "command": {
+            "field": {
+              "event": {
+                "side": "home",
+                "kind": "shootout_goal",
+                "player": 1
+              }
+            }
+          }
+        },
+        {
+          "command": {
+            "field": {
+              "event": {
+                "side": "away",
+                "kind": "shootout_miss",
+                "player": 2
+              }
+            }
+          }
+        },
+        {
+          "command": {
+            "field": "complete"
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              1
+            ],
+            "/state/field/shootout": [
+              1,
+              0
+            ],
+            "/state/winner": "home",
+            "/state/status": "completed"
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/status": "live",
+            "/state/field/running": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "futsal-own-goal-and-undo",
+      "sport": "futsal",
+      "steps": [
+        {
+          "command": {
+            "field": {
+              "event": {
+                "side": "home",
+                "kind": "own_goal",
+                "player": 1
+              }
+            }
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "field": {
+              "event": {
+                "side": "home",
+                "kind": "shootout_goal",
+                "player": 1
+              }
+            }
+          },
+          "expect": {
+            "/state/points": [
+              0,
+              0
+            ]
+          },
+          "reject": true
+        }
+      ]
+    },
+    {
+      "id": "futsal-period-clock-undo",
+      "sport": "futsal",
+      "steps": [
+        {
+          "command": {
+            "field": {
+              "set_time": 10000
+            }
+          }
+        },
+        {
+          "command": {
+            "field": "next_period"
+          }
+        },
+        {
+          "command": {
+            "field": {
+              "set_time": 5000
+            }
+          },
+          "expect": {
+            "/state/field/period": 2
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/field/period": 1,
+            "/state/field/clock_ms": 10000,
+            "/state/field/running": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "futsal-shootout-separate-closeout",
+      "sport": "futsal",
+      "steps": [
+        {
+          "command": {
+            "field": {
+              "event": {
+                "side": "home",
+                "kind": "goal",
+                "player": 1
+              }
+            }
+          }
+        },
+        {
+          "command": {
+            "field": {
+              "event": {
+                "side": "home",
+                "kind": "own_goal",
+                "player": 1
+              }
+            }
+          }
+        },
+        {
+          "command": {
+            "field": "next_period"
+          },
+          "repeat": 4
+        },
+        {
+          "command": {
+            "field": {
+              "event": {
+                "side": "home",
+                "kind": "shootout_goal",
+                "player": 1
+              }
+            }
+          }
+        },
+        {
+          "command": {
+            "field": {
+              "event": {
+                "side": "away",
+                "kind": "shootout_miss",
+                "player": 2
+              }
+            }
+          }
+        },
+        {
+          "command": {
+            "field": "complete"
+          },
+          "expect": {
+            "/state/points": [
+              1,
+              1
+            ],
+            "/state/field/shootout": [
+              1,
+              0
+            ],
+            "/state/winner": "home",
+            "/state/status": "completed"
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/status": "live",
+            "/state/field/running": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "futsal-second-half-foul-window",
+      "sport": "futsal",
+      "steps": [
+        {
+          "command": {
+            "field": "next_period"
+          }
+        },
+        {
+          "command": {
+            "field": {
+              "event": {
+                "side": "home",
+                "kind": "foul",
+                "player": 1
+              }
+            }
+          },
+          "repeat": 5
+        },
+        {
+          "command": {
+            "field": "next_period"
+          },
+          "expect": {
+            "/state/field/fouls": [
+              5,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "field": {
+              "event": {
+                "side": "home",
+                "kind": "foul",
+                "player": 1
+              }
+            }
+          }
+        },
+        {
+          "command": {
+            "field": "next_period"
+          },
+          "expect": {
+            "/state/field/fouls": [
+              6,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "field": "next_period"
+          },
+          "expect": {
+            "/state/field/fouls": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "command": {
+            "undo": true
+          },
+          "expect": {
+            "/state/field/period": 4,
+            "/state/field/fouls": [
+              6,
+              0
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

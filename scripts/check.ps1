@@ -8,7 +8,7 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     cargo +stable clippy --locked --workspace --all-targets -- -D warnings
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    python -m unittest discover -s scripts -p test_github_release.py -v
+    python -m unittest discover -s scripts -p 'test_*.py' -v
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     cargo +stable build --locked
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
