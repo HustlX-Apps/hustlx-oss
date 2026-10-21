@@ -60,4 +60,5 @@ Each slice should produce a reviewable change, matching documentation, and evide
 - [x] Persist sport-specific scoring, serving, unit results, explicit completion and undo across restart.
 - [x] Preserve basketball history through schema 4 and isolate its controls from set/rally sports.
 - [x] Capture native setup/scoring/result evidence and complete Cargo verification.
-- [ ] Add advanced participant statistics and full web-console parity in separately scoped work.
+- [x] Port the current native operator layout with optional roster snapshots, participant actions, volleyball rotation/substitutions/libero and local Football/Futsal clocks/events/results.
+- [ ] Add full statistical reports, detailed field event correction, staff cards, reduction timers and remaining hosted-console workflows.

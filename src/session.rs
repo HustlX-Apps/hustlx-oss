@@ -2,6 +2,7 @@
 use crate::{
     Side, Stat,
     clock::{ClockCommand, ClockState},
+    field_sport::{FieldCommand, FieldState},
     lineup::LineupKind,
     sport::{Command as SportCommand, Sport},
     storage::{Error, MatchDraft, Result, SavedMatch, SportMatchDraft, Store},
@@ -74,6 +75,29 @@ impl Session {
             .clock
             .elapsed(now.saturating_duration_since(self.anchor))
     }
+    fn active_field(&self) -> Option<&FieldState> {
+        self.active.as_ref()?.sport_state.as_ref()?.field.as_ref()
+    }
+    fn clock_running(&self) -> bool {
+        self.active_field().map_or_else(
+            || {
+                self.active
+                    .as_ref()
+                    .is_some_and(|active| active.clock.running)
+            },
+            |field| field.running,
+        )
+    }
+    pub fn field_clock_at(&self, now: Instant) -> FieldState {
+        let field = self
+            .active_field()
+            .expect("Field clock requires an open field match");
+        let now = self
+            .pending
+            .as_ref()
+            .map_or(now, |pending| pending.freeze_at);
+        field.elapsed(now.saturating_duration_since(self.anchor))
+    }
     fn accept(&mut self, saved: SavedMatch, now: Instant) {
         self.active = Some(saved);
         self.pending = None;
@@ -88,8 +112,16 @@ impl Session {
         }
         let saved = self.store.load_match(id)?;
         let recovered = saved.clock.running;
+        let recovered_field = saved
+            .sport_state
+            .as_ref()
+            .and_then(|state| state.field.as_ref())
+            .is_some_and(|field| field.running);
         self.accept(saved, Instant::now());
-        if recovered {
+        if recovered_field {
+            self.notice = Some("Recovered the field clock paused at its last saved checkpoint. Review the time before starting.".into());
+            self.field_command_at(FieldCommand::Pause, self.anchor)?;
+        } else if recovered {
             self.notice=Some("Recovered a running clock at its last saved checkpoint. Review the times, then press Start.".into());
             let clock = self.active.as_ref().expect("Opened match").clock.paused();
             self.begin(Action::Clock, clock, Instant::now())?;
@@ -108,17 +140,57 @@ impl Session {
         self.accept(saved, Instant::now());
         Ok(())
     }
+    pub fn create_sport_with_teams(
+        &mut self,
+        draft: &SportMatchDraft,
+        teams: [Option<i64>; 2],
+    ) -> Result<()> {
+        self.pause_for_close_at(Instant::now())?;
+        let saved = self.store.create_sport_match_with_teams(draft, teams)?;
+        self.accept(saved, Instant::now());
+        Ok(())
+    }
     pub fn sport_command(&mut self, command: SportCommand) -> Result<()> {
+        self.sport_command_at(command, Instant::now())
+    }
+    pub fn sport_command_at(&mut self, command: SportCommand, now: Instant) -> Result<()> {
+        if let SportCommand::Field(command) = command {
+            return self.field_command_at(command, now);
+        }
         let mut state = self
             .active
             .as_ref()
             .and_then(|a| a.sport_state.clone())
-            .ok_or_else(|| Error::Validation("Open a volleyball or racquet match first.".into()))?;
+            .ok_or_else(|| Error::Validation("Open a sport match first.".into()))?;
         state
             .apply(command)
             .map_err(|e| Error::Validation(e.to_string()))?;
-        let now = Instant::now();
+        if self.active_field().is_some_and(|field| field.running) {
+            self.field_command_at(FieldCommand::Pause, now)?;
+        }
         self.begin(Action::Sport(command), self.clock_at(now), now)
+    }
+    pub fn field_command_at(&mut self, command: FieldCommand, now: Instant) -> Result<()> {
+        if self.active_field().is_none() {
+            return Err(Error::Validation(
+                "Open a football or futsal match first.".into(),
+            ));
+        }
+        let field = self.field_clock_at(now);
+        let wrapped = SportCommand::FieldAt {
+            clock_ms: field.clock_ms,
+            running: field.running,
+            command,
+        };
+        let mut state = self
+            .active
+            .as_ref()
+            .and_then(|active| active.sport_state.clone())
+            .expect("Field command requires sport state");
+        state
+            .apply(wrapped)
+            .map_err(|error| Error::Validation(error.to_string()))?;
+        self.begin(Action::Sport(wrapped), self.clock_at(now), now)
     }
     fn require_basketball(&self) -> Result<()> {
         if self
@@ -157,22 +229,24 @@ impl Session {
     }
     pub fn undo(&mut self) -> Result<()> {
         let now = Instant::now();
-        let action = if let Some(active) = &self.active
-            && active.sport_state.is_some()
-        {
-            if !active
-                .sport_history
-                .iter()
-                .any(|e| e.command.is_some() && !e.undone)
+        if self.active_field().is_some_and(|field| field.running) {
+            self.field_command_at(FieldCommand::Pause, now)?;
+        }
+        let action =
+            if let Some(active) = &self.active
+                && active.sport_state.is_some()
             {
-                return Err(Error::Validation(
-                    "There is no sport action to undo.".into(),
-                ));
-            }
-            Action::UndoSport
-        } else {
-            Action::Undo
-        };
+                if !active.sport_history.iter().any(|e| {
+                    e.command.is_some_and(crate::storage::sport_action_undoable) && !e.undone
+                }) {
+                    return Err(Error::Validation(
+                        "There is no sport action to undo.".into(),
+                    ));
+                }
+                Action::UndoSport
+            } else {
+                Action::Undo
+            };
         self.begin(action, self.clock_at(now), now)
     }
     pub fn save_lineup_at(
@@ -200,7 +274,9 @@ impl Session {
         if self.pending.is_some() {
             return Err(Error::Validation("Retry the pending save before closing, or explicitly reopen the match to discard it.".into()));
         }
-        if self.active.as_ref().is_some_and(|a| a.clock.running) {
+        if self.active_field().is_some_and(|field| field.running) {
+            self.field_command_at(FieldCommand::Pause, now)?;
+        } else if self.active.as_ref().is_some_and(|a| a.clock.running) {
             self.command_at(ClockCommand::Pause, now)?;
         }
         Ok(())
@@ -213,21 +289,21 @@ impl Session {
         let mono = now.saturating_duration_since(self.last_tick);
         let discontinuity = gap.is_none_or(|d| d.abs_diff(mono) > Duration::from_secs(2));
         self.last_wall = wall;
-        if discontinuity
-            && self.active.as_ref().is_some_and(|a| a.clock.running)
-            && self.pending.is_none()
-        {
+        if discontinuity && self.clock_running() && self.pending.is_none() {
             return self.interrupted(now);
         }
         self.tick_at(now)
     }
     fn interrupted(&mut self, _now: Instant) -> Result<()> {
-        let clock = self.clock_at(self.last_tick).paused();
         self.notice=Some("Clocks paused after an interruption or system-time change. Review the saved times before restarting.".into());
+        if self.active_field().is_some() {
+            return self.field_command_at(FieldCommand::Pause, self.last_tick);
+        }
+        let clock = self.clock_at(self.last_tick).paused();
         self.begin(Action::Clock, clock, self.last_tick)
     }
     pub fn tick_at(&mut self, now: Instant) -> Result<()> {
-        if self.pending.is_some() || self.active.as_ref().is_none_or(|a| !a.clock.running) {
+        if self.pending.is_some() || !self.clock_running() {
             self.last_tick = now;
             return Ok(());
         }
@@ -235,6 +311,25 @@ impl Session {
             return self.interrupted(now);
         }
         self.last_tick = now;
+        if self.active_field().is_some() {
+            let field = self.field_clock_at(now);
+            if !field.running
+                || now.saturating_duration_since(self.last_checkpoint) >= Duration::from_secs(5)
+            {
+                if !field.running {
+                    self.notice =
+                        Some("Period clock expired. Review the time before continuing.".into());
+                }
+                self.field_command_at(
+                    FieldCommand::Checkpoint {
+                        clock_ms: field.clock_ms,
+                        running: field.running,
+                    },
+                    now,
+                )?;
+            }
+            return Ok(());
+        }
         let clock = self.clock_at(now);
         if !clock.running
             || now.saturating_duration_since(self.last_checkpoint) >= Duration::from_secs(5)
@@ -305,7 +400,7 @@ impl Session {
                 .save_clock(p.match_id, p.revision, p.id, p.clock)?,
         };
         // Clock-only commands retain the operator's player selection.
-        let selected = if matches!(p.action, Action::Clock) {
+        let selected = if matches!(p.action, Action::Clock | Action::Sport(_)) {
             self.active.as_ref().and_then(|a| a.game.selected)
         } else {
             None

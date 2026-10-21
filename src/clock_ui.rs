@@ -47,7 +47,13 @@ impl App {
             _ => None,
         });
         let ticks = if cfg!(target_os = "macos")
-            || (self.active().is_some_and(|a| a.clock.running) && !self.pending())
+            || (self.active().is_some_and(|a| {
+                a.clock.running
+                    || a.sport_state
+                        .as_ref()
+                        .and_then(|s| s.field.as_ref())
+                        .is_some_and(|f| f.running)
+            }) && !self.pending())
         {
             iced::time::every(Duration::from_millis(100)).map(Message::Tick)
         } else {

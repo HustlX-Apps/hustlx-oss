@@ -21,7 +21,7 @@ SQLite is bundled with the Rust executable. Normal data locations are:
 
 The application creates the directory on first launch and starts with an empty catalog. The database and its journal sidecars belong to the operator and must never be committed to Git. No data is sent to HustlX. There is no cloud backup or database encryption in this slice.
 
-## Schema version 5
+## Schema version 6
 
 | Table | Responsibility |
 | --- | --- |
@@ -63,3 +63,11 @@ Schema 4 adds `matches.sport` with a basketball default, `sport_matches` with a 
 Schema 5 preserves these sport rows, local UUIDs, rules JSON and command/undo history while adding basketball event timing.
 
 `src/sport_storage.rs` replays active commands through the pure scoring engine. A transaction appends the command and increments the shared match revision before returning the new projection. Undo refers to the latest active command and restores the complete score, service and completion state through replay. UUID checks cover sport, statistic, clock and lineup command families. Future rule or payload versions fail visibly instead of silently interpreting unknown data. There is no schema downgrade; keep the closed pre-upgrade library copy.
+
+## Native sport participants and field clocks
+
+Non-basketball creation accepts optional catalog teams separately from the named sides. Their active players are copied into `match_players` in the same creation transaction. A saved actor must belong to the selected side's immutable roster; duplicate names never identify or merge players. Named-side scoring remains valid without any players. Existing saved rosters cannot yet be extended after creation.
+
+Lineups, player actions, exchanges, rotation and timeout counts are replayed from `sport_events`. Volleyball side-outs rotate the receiving side; a new set restores the last explicit starters and resets set timeout/substitution/libero bookkeeping. Rule/count deviations remain advisory. Football and Futsal use timed sport receipts, not basketball `match_clocks`. Their clock-only receipts are skipped by Undo. Undo of a timed action retains its observed clock paused while removing only the action.
+
+Schema 6 rebuilds the matches parent table to extend its sport CHECK while preserving primary keys, child rows, custom indexes/triggers and the autoincrement high-water mark. Foreign-key validation precedes commit. Older application versions reject schema 6; preserve a pre-upgrade backup.

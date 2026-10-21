@@ -140,7 +140,7 @@ fn schema_one_upgrade_keeps_history_and_supplies_paused_clock_defaults() {
             .unwrap()
             .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        5
+        6
     );
 }
 #[test]

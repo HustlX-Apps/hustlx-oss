@@ -90,7 +90,7 @@ fn schema_four_upgrade_preserves_sport_rules_history_and_legacy_basketball() {
     assert_eq!(
         raw.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        5
+        6
     );
     let stored: (String, String) = raw
         .query_row(
@@ -433,7 +433,7 @@ fn schema_three_upgrade_preserves_unknown_history_and_only_stamps_new_events() {
     assert_eq!(
         raw.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        5
+        6
     );
     assert_eq!(
         raw.query_row("SELECT target_id FROM match_events WHERE id=3", [], |r| r
