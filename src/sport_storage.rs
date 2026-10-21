@@ -241,7 +241,10 @@ pub(super) fn projection(
             r.get::<_, bool>(5)?,
         ))
     })?;
-    let mut events = vec![];
+    let mut events: Vec<SportEvent> = vec![];
+    // Track the period that existed when each receipt was written, including
+    // advances later undone. A clock observation belongs only to that period.
+    let mut recorded_period = 1;
     for row in rows {
         let (event_id, version, kind, payload, target_id, undone) = row?;
         if version != 1 {
@@ -261,20 +264,34 @@ pub(super) fn projection(
             "undo" => None,
             _ => return invalid("Unsupported saved sport action."),
         };
-        if let Some(command) = command
-            && !undone
-        {
-            state.apply(command).map_err(engine_error)?;
-        } else if undone && let Some(Command::FieldAt { clock_ms, .. }) = command {
-            // Undo retracts the domain action, not the time observed before it.
-            state
-                .apply(Command::Field(
-                    crate::field_sport::FieldCommand::Checkpoint {
-                        clock_ms,
-                        running: false,
-                    },
-                ))
-                .map_err(engine_error)?;
+        let same_period = state
+            .field
+            .as_ref()
+            .is_none_or(|field| field.period == recorded_period);
+        if let Some(command) = command {
+            if !undone && same_period {
+                state.apply(command).map_err(engine_error)?;
+            } else if undone
+                && same_period
+                && let Command::FieldAt { clock_ms, .. } = command
+            {
+                // Undo retracts the domain action, not the time observed before it.
+                state
+                    .apply(Command::Field(
+                        crate::field_sport::FieldCommand::Checkpoint {
+                            clock_ms,
+                            running: false,
+                        },
+                    ))
+                    .map_err(engine_error)?;
+            }
+            if advances_field_period(command) {
+                recorded_period += 1;
+            }
+        } else if events.iter().any(|event| {
+            Some(event.id) == target_id && event.command.is_some_and(advances_field_period)
+        }) {
+            recorded_period -= 1;
         }
         events.push(SportEvent {
             id: event_id,
@@ -284,6 +301,17 @@ pub(super) fn projection(
         });
     }
     Ok((Some(state), events))
+}
+
+fn advances_field_period(command: Command) -> bool {
+    matches!(
+        command,
+        Command::Field(crate::field_sport::FieldCommand::NextPeriod)
+            | Command::FieldAt {
+                command: crate::field_sport::FieldCommand::NextPeriod,
+                ..
+            }
+    )
 }
 
 fn receipt(db: &Connection, command: Uuid) -> Result<Option<(i64, String, Option<String>)>> {

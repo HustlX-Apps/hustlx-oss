@@ -67,7 +67,8 @@ pub enum FieldCommand {
 #[serde(deny_unknown_fields)]
 pub struct FieldState {
     pub score: [u16; 2],
-    /// Futsal resets these counters at each period; football keeps match totals.
+    /// Futsal resets at halftime; second-half fouls carry through extra time.
+    /// Shootouts clear the accumulated count. Football keeps match totals.
     pub fouls: [u16; 2],
     pub yellow: [u16; 2],
     pub red: [u16; 2],
@@ -223,7 +224,7 @@ impl FieldState {
                 self.period += 1;
                 self.running = false;
                 self.clock_ms = if self.futsal { self.period_ms() } else { 0 };
-                if self.futsal {
+                if self.futsal && matches!(self.period, 2 | SHOOTOUT_PERIOD) {
                     self.fouls = [0; 2];
                 }
             }

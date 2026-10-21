@@ -251,7 +251,7 @@ impl App {
         controls = controls.push(teams);
         if futsal && !shootout {
             controls = controls.push(
-                text("Fouls reset each period. Rule guidance never blocks agreed play.")
+                text("Fouls reset at halftime and carry through extra time. Guidance never blocks agreed play.")
                     .size(10)
                     .color(c.muted),
             );

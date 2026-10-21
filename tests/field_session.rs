@@ -231,3 +231,91 @@ fn completion_undo_keeps_the_final_observed_clock_paused_and_skips_clock_receipt
     s.undo().unwrap();
     assert_eq!(field(&s).score, [0, 0]);
 }
+
+#[test]
+fn period_undo_restores_its_clock_and_ignores_later_period_clock_receipts() {
+    for sport in [Sport::Football, Sport::Futsal] {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("period-undo.sqlite3");
+        let mut s = Session::new(Store::open(&path).unwrap());
+        s.create_sport(&draft(sport)).unwrap();
+        let id = s.active().unwrap().summary.id;
+        let t = Instant::now();
+        s.field_command_at(F::SetTime(12_000), t).unwrap();
+        s.field_command_at(F::NextPeriod, t).unwrap();
+        s.field_command_at(F::SetTime(25_000), t).unwrap();
+        s.field_command_at(F::Start, t).unwrap();
+        s.field_command_at(F::Pause, t + Duration::from_secs(1))
+            .unwrap();
+        s.undo().unwrap();
+        assert_eq!(
+            (field(&s).period, field(&s).clock_ms, field(&s).running),
+            (1, 12_000, false)
+        );
+        drop(s);
+        let mut s = Session::new(Store::open(&path).unwrap());
+        s.open(id).unwrap();
+        assert_eq!((field(&s).period, field(&s).clock_ms), (1, 12_000));
+        // A new branch of play after undo must use its own clock and period.
+        s.field_command_at(F::SetTime(8_000), t).unwrap();
+        s.field_command_at(F::NextPeriod, t).unwrap();
+        s.field_command_at(F::SetTime(7_000), t).unwrap();
+        s.field_command_at(goal(), t).unwrap();
+        s.undo().unwrap();
+        assert_eq!((field(&s).period, field(&s).clock_ms), (2, 7_000));
+        s.undo().unwrap();
+        assert_eq!((field(&s).period, field(&s).clock_ms), (1, 8_000));
+    }
+}
+
+#[test]
+fn undoing_extra_time_cannot_replay_its_longer_clock_into_a_short_regulation_period() {
+    let mut s = Session::new(Store::open(":memory:").unwrap());
+    s.create_sport(&draft(Sport::Futsal)).unwrap();
+    let t = Instant::now();
+    s.field_command_at(F::NextPeriod, t).unwrap();
+    s.field_command_at(F::SetTime(0), t).unwrap();
+    s.field_command_at(F::NextPeriod, t).unwrap();
+    s.field_command_at(F::Start, t).unwrap();
+    s.field_command_at(F::Pause, t + Duration::from_secs(1))
+        .unwrap();
+    s.undo().unwrap();
+    assert_eq!((field(&s).period, field(&s).clock_ms), (2, 0));
+    assert!(!s.has_pending_save());
+}
+
+#[test]
+fn futsal_foul_window_survives_period_undo_reentry_and_reopen() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("foul-window.sqlite3");
+    let mut s = Session::new(Store::open(&path).unwrap());
+    s.create_sport(&draft(Sport::Futsal)).unwrap();
+    let id = s.active().unwrap().summary.id;
+    let t = Instant::now();
+    let foul = F::Event {
+        side: Side::Home,
+        kind: FieldEvent::Foul,
+        player: None,
+    };
+    s.field_command_at(foul, t).unwrap();
+    s.field_command_at(F::NextPeriod, t).unwrap();
+    s.field_command_at(foul, t).unwrap();
+    s.field_command_at(foul, t).unwrap();
+    s.field_command_at(F::NextPeriod, t).unwrap();
+    s.field_command_at(foul, t).unwrap();
+    assert_eq!((field(&s).period, field(&s).fouls), (3, [3, 0]));
+    s.undo().unwrap();
+    s.undo().unwrap();
+    assert_eq!((field(&s).period, field(&s).fouls), (2, [2, 0]));
+    s.field_command_at(F::NextPeriod, t).unwrap();
+    s.field_command_at(F::NextPeriod, t).unwrap();
+    assert_eq!((field(&s).period, field(&s).fouls), (4, [2, 0]));
+    s.field_command_at(F::NextPeriod, t).unwrap();
+    assert_eq!(field(&s).fouls, [0, 0]);
+    s.undo().unwrap();
+    assert_eq!((field(&s).period, field(&s).fouls), (4, [2, 0]));
+    drop(s);
+    let mut s = Session::new(Store::open(&path).unwrap());
+    s.open(id).unwrap();
+    assert_eq!((field(&s).period, field(&s).fouls), (4, [2, 0]));
+}

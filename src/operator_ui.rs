@@ -227,7 +227,7 @@ impl App {
             format!(
                 "{} / {}",
                 if f.period <= 2 {
-                    "HALF"
+                    if f.is_futsal() { "PERIOD" } else { "HALF" }
                 } else if f.period < 5 {
                     "EXTRA TIME"
                 } else {

@@ -66,7 +66,7 @@ fn own_goals_credit_the_opponent_and_stat_events_do_not_change_score_or_clock() 
 }
 
 #[test]
-fn futsal_fouls_reset_per_period_without_clearing_discipline_or_score() {
+fn futsal_fouls_reset_at_halftime_without_clearing_discipline_or_score() {
     let mut state = FieldState::new(true, 20 * 60_000).unwrap();
     for _ in 0..6 {
         state.apply(event(Side::Home, E::Foul)).unwrap();
@@ -77,6 +77,23 @@ fn futsal_fouls_reset_per_period_without_clearing_discipline_or_score() {
     assert_eq!(state.fouls, [0, 0]);
     assert_eq!(state.yellow, [1, 0]);
     assert_eq!(state.score, [0, 1]);
+}
+
+#[test]
+fn futsal_second_half_fouls_carry_through_extra_time_and_clear_for_shootout() {
+    let mut state = FieldState::new(true, 20 * 60_000).unwrap();
+    state.apply(C::NextPeriod).unwrap();
+    for _ in 0..5 {
+        state.apply(event(Side::Home, E::Foul)).unwrap();
+    }
+    state.apply(event(Side::Away, E::Foul)).unwrap();
+    state.apply(C::NextPeriod).unwrap();
+    assert_eq!((state.period, state.fouls), (3, [5, 1]));
+    state.apply(event(Side::Home, E::Foul)).unwrap();
+    state.apply(C::NextPeriod).unwrap();
+    assert_eq!((state.period, state.fouls), (4, [6, 1]));
+    state.apply(C::NextPeriod).unwrap();
+    assert_eq!((state.period, state.fouls), (5, [0, 0]));
 }
 
 #[test]
