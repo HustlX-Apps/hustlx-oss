@@ -137,6 +137,7 @@ impl App {
                     row![
                         text_input("Correct MM:SS", &self.operator_time)
                             .on_input_maybe(enabled.then_some(Message::OperatorTime))
+                            .on_submit_maybe(enabled.then_some(Message::ApplyOperatorTime))
                             .padding(8)
                             .size(12)
                             .width(Fill),

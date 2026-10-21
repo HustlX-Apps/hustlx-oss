@@ -489,6 +489,35 @@ mod tests {
         send(&mut app, Message::ToggleClock);
         assert!(!app.active().unwrap().clock.running);
     }
+    #[test]
+    fn tab_and_shift_tab_request_focus_operations_but_guard_modified_or_captured_keys() {
+        let mut app = app(Store::open(":memory:").unwrap());
+        for key in ["Tab", "Shift+Tab"] {
+            let task = app.update(Message::Key {
+                key: key.into(),
+                repeat: false,
+                modified: false,
+                captured: false,
+            });
+            assert!(
+                task.units() > 0,
+                "{key} must request a widget focus operation"
+            );
+            for (repeat, modified, captured) in [
+                (true, false, false),
+                (false, true, false),
+                (false, false, true),
+            ] {
+                let task = app.update(Message::Key {
+                    key: key.into(),
+                    repeat,
+                    modified,
+                    captured,
+                });
+                assert_eq!(task.units(), 0);
+            }
+        }
+    }
 
     #[test]
     fn invalid_rule_input_stays_editable_and_does_not_create_a_match() {

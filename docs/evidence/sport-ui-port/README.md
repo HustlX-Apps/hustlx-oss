@@ -4,7 +4,7 @@ October 21, 2026. Host: macOS 27 arm64. Scope: Volleyball, Pickleball, Padel, Te
 
 ## Local verification
 
-`PATH=/Users/jaylupos/.cargo/bin:$PATH bash scripts/check.sh` passed with exit 0. It ran formatting, 137 Rust workspace tests (zero failures or ignored tests), Clippy with warnings denied, 16 Python release-helper/harness tests, the native debug build and the version 0.1.0 arm64 packaging dry-run. No hosted build or release was dispatched. The existing `block` 0.1.6 dependency emits a future-Rust compatibility notice; current build and Clippy pass.
+`PATH=/Users/jaylupos/.cargo/bin:$PATH bash scripts/check.sh` passed with exit 0. It ran formatting, 141 Rust workspace tests (zero failures or ignored tests), Clippy with warnings denied, 17 Python release-helper/harness tests, the native debug build and the version 0.1.0 arm64 packaging dry-run. No hosted build or release was dispatched. The existing `block` 0.1.6 dependency emits a future-Rust compatibility notice; current build and Clippy pass.
 
 New tests cover player-attributed scoring and non-scoring actions, side-out rotation, open substitution/libero exchange, per-set reset, roster snapshot identity, wrong-side actors, stale revisions, exact retries and schema 5 migration. The migration test retains basketball child records, an existing index/trigger and a deleted high ID's autoincrement boundary. Existing schema 1/3/4 preservation tests continue through schema 6.
 
@@ -13,6 +13,8 @@ Field tests cover football count-up/stoppage, futsal countdown/expiry, own goals
 Follow-up audit: [resolved findings and regression evidence](audit.md). Period rollback now fences later-period clock observations; Futsal second-half fouls carry through extra time. Four added regression tests and two native captures cover these corrections.
 
 Expanded sport coverage: [test audit, App E2E, evaluations and local harness](verification.md). The harness covers all nine sports and emits machine-readable local evidence.
+
+Follow-up native keyboard/UI run: [all nine sports, resolved issues and restart captures](../native-sport-e2e/README.md).
 
 ## Native inspection
 

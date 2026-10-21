@@ -4,7 +4,7 @@ use hustlx_oss::storage::{Error, Result};
 use hustlx_oss::{
     field_sport::FieldCommand as F,
     operator::{PlayerAction as A, index},
-    sport::{Command, Sport, Status},
+    sport::{Command, Sport, State, Status},
 };
 use iced::widget::column;
 
@@ -16,6 +16,28 @@ pub(super) struct OperatorDraft {
     libero: bool,
     outgoing: Option<i64>,
     incoming: Option<i64>,
+}
+
+fn operator_match_tiebreak_result(state: &State) -> bool {
+    matches!(state.sport, Sport::Tennis | Sport::Padel)
+        && state.status != Status::Live
+        && state.rules().match_tiebreak
+        && state.unit_number == u16::from(state.rules().best_of)
+}
+
+fn operator_score_label(state: &State, side: Side) -> String {
+    if matches!(state.sport, Sport::Tennis | Sport::Padel)
+        && state.status != Status::Live
+        && let Some(set) = state.completed_units.last()
+    {
+        let score = if operator_match_tiebreak_result(state) {
+            set.tiebreak_points.unwrap_or(set.score)
+        } else {
+            set.score
+        };
+        return score[index(side)].to_string();
+    }
+    state.point_label(side)
 }
 
 impl App {
@@ -253,7 +275,7 @@ impl App {
                     .size(18)
                     .font(HEADING)
                     .color(if side == Side::Home { c.home } else { c.away }),
-                text(s.point_label(side)).size(48).font(DISPLAY)
+                text(operator_score_label(s, side)).size(48).font(DISPLAY)
             ]
             .spacing(1)
             .width(Fill)
@@ -284,7 +306,13 @@ impl App {
                     })
                     .size(10)
                     .color(c.muted),
-                    text(if s.field.is_none() && s.status == Status::Live {
+                    text(if operator_match_tiebreak_result(s) {
+                        "MATCH TIEBREAK POINTS".into()
+                    } else if matches!(s.sport, Sport::Tennis | Sport::Padel)
+                        && s.status != Status::Live
+                    {
+                        "LAST SET GAMES".into()
+                    } else if s.field.is_none() && s.status == Status::Live {
                         format!(
                             "SERVE {} / {}{}",
                             if s.server == Side::Home {
@@ -987,6 +1015,135 @@ mod tests {
                 let _ = app.view();
                 send(&mut app, Message::CancelOperatorLineup);
             }
+        }
+    }
+    #[test]
+    fn basketball_clicked_player_can_score_with_keys_without_toggling_selection_off() {
+        let mut app = fixture(Sport::Basketball);
+        for (side, id, key, score) in [(Side::Home, 1, "w", 2), (Side::Away, 9, "e", 3)] {
+            send(&mut app, Message::Select(side, id));
+            send(
+                &mut app,
+                Message::Key {
+                    key: key.into(),
+                    repeat: false,
+                    modified: false,
+                    captured: false,
+                },
+            );
+            assert_eq!(app.game().score(side), score);
+            assert_eq!(app.game().selected, None);
+            for (repeat, modified, captured) in [
+                (true, false, false),
+                (false, true, false),
+                (false, false, true),
+            ] {
+                send(
+                    &mut app,
+                    Message::Key {
+                        key: key.into(),
+                        repeat,
+                        modified,
+                        captured,
+                    },
+                );
+                assert_eq!(app.game().score(side), score);
+            }
+        }
+        send(
+            &mut app,
+            Message::Key {
+                key: "Backspace".into(),
+                repeat: false,
+                modified: false,
+                captured: false,
+            },
+        );
+        assert_eq!(app.game().score(Side::Away), 0);
+        assert_eq!(app.game().score(Side::Home), 2);
+    }
+    #[test]
+    fn tennis_and_padel_result_labels_show_saved_set_games_instead_of_last_game_points() {
+        for sport in [Sport::Tennis, Sport::Padel] {
+            let mut rules = hustlx_oss::sport::Rules::defaults(sport);
+            rules.best_of = 1;
+            rules.target = 2;
+            let mut state = State::new(sport, rules).unwrap();
+            for _ in 0..3 {
+                state.apply(Command::Rally(Side::Home)).unwrap();
+            }
+            assert_eq!(operator_score_label(&state, Side::Home), "40");
+            for _ in 0..5 {
+                state.apply(Command::Rally(Side::Home)).unwrap();
+            }
+            assert_eq!(state.status, Status::Decided);
+            assert_eq!(operator_score_label(&state, Side::Home), "2");
+            assert_eq!(operator_score_label(&state, Side::Away), "0");
+            state.apply(Command::Complete).unwrap();
+            assert_eq!(operator_score_label(&state, Side::Home), "2");
+            let mut rules = hustlx_oss::sport::Rules::defaults(sport);
+            rules.best_of = 1;
+            rules.match_tiebreak = true;
+            let mut state = State::new(sport, rules).unwrap();
+            for side in [Side::Home, Side::Away] {
+                for _ in 0..9 {
+                    state.apply(Command::Rally(side)).unwrap();
+                }
+            }
+            for _ in 0..2 {
+                state.apply(Command::Rally(Side::Home)).unwrap();
+            }
+            assert_eq!(state.status, Status::Decided);
+            assert!(operator_match_tiebreak_result(&state));
+            assert_eq!(operator_score_label(&state, Side::Home), "11");
+            assert_eq!(operator_score_label(&state, Side::Away), "9");
+        }
+    }
+    #[test]
+    fn escape_cancels_each_sport_draft_without_writing_or_leaking_basketball_keys() {
+        for sport in Sport::ALL.into_iter().filter(|s| *s != Sport::Basketball) {
+            let mut app = fixture(sport);
+            let revision = app.active().unwrap().summary.revision;
+            send(
+                &mut app,
+                Message::OpenOperatorLineup(Side::Home, false, false),
+            );
+            send(&mut app, Message::OperatorPick(1));
+            for captured in [true, false] {
+                send(
+                    &mut app,
+                    Message::Key {
+                        key: "Escape".into(),
+                        repeat: false,
+                        modified: false,
+                        captured,
+                    },
+                );
+                assert_eq!(app.operator_draft.is_some(), captured, "{sport:?}");
+            }
+            send(&mut app, Message::ConfirmSportFinish);
+            send(
+                &mut app,
+                Message::Key {
+                    key: "Escape".into(),
+                    repeat: false,
+                    modified: false,
+                    captured: false,
+                },
+            );
+            assert!(!app.operator_finish);
+            for key in [" ", "w", "e", "p", "Backspace"] {
+                send(
+                    &mut app,
+                    Message::Key {
+                        key: key.into(),
+                        repeat: false,
+                        modified: false,
+                        captured: false,
+                    },
+                );
+            }
+            assert_eq!(app.active().unwrap().summary.revision, revision);
         }
     }
     #[test]

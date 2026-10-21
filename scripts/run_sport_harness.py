@@ -67,7 +67,7 @@ def run_gate(name, command, log, timeout, env, expected):
         result["tests"] = counts(output)
         if name == "e2e":
             ran = {name.replace("_", "-") for name in re.findall(r"test ui::e2e::([a-z_]+) \.\.\. ok", output)}
-            if ran != SPORTS or result["tests"]["passed"] != 9:
+            if ran != SPORTS or result["tests"]["passed"] < 9:
                 raise ValueError("All nine named App E2E journeys must execute")
         if name == "eval":
             result["cases"] = eval_results(output, expected)
@@ -120,7 +120,7 @@ def main(argv=None):
         for suite in ["racquet_operators", "operators", "sports", "sport_storage", "operator_storage", "field_sports", "field_session"]:
             regression.extend(["--test", suite])
         commands = {"regression": regression,
-                    "e2e": base + ["--bin", "hustlx-oss", "ui::e2e::", "--", "--nocapture", "--test-threads=1"],
+                    "e2e": base + ["--bin", "hustlx-oss", "ui::", "--", "--nocapture", "--test-threads=1"],
                     "eval": base + ["--no-default-features", "--test", "sport_evals", "--", "--nocapture", "--test-threads=1"]}
         env = dict(os.environ, CARGO_TERM_COLOR="never", HUSTLX_OSS_EVAL_FIXTURE=str(fixture))
         # Test-only child-process mode must never leak into a parent harness run.

@@ -49,6 +49,17 @@ class SportHarnessTests(unittest.TestCase):
             self.assertEqual(gate["status"], "failed")
             self.assertIn("nine named", gate["error"])
 
+    def test_e2e_keeps_all_nine_journeys_required_when_controller_regressions_are_added(self):
+        output = "\n".join(f"test ui::e2e::{sport.replace('-', '_')} ... ok" for sport in sorted(harness.SPORTS))
+        output += "\ntest ui::operators::tests::keyboard ... ok\ntest result: ok. 10 passed; 0 failed; 0 ignored;"
+        with tempfile.TemporaryDirectory() as root:
+            gate = harness.run_gate("e2e", [sys.executable, "-c", f"print({output!r})"], Path(root) / "e2e.log", 10, os.environ, {})
+            self.assertEqual(gate["status"], "passed")
+            self.assertEqual(gate["tests"]["passed"], 10)
+            output = output.replace("test ui::e2e::padel ... ok", "test ui::operators::tests::another ... ok")
+            gate = harness.run_gate("e2e", [sys.executable, "-c", f"print({output!r})"], Path(root) / "missing.log", 10, os.environ, {})
+            self.assertEqual(gate["status"], "failed")
+
     def test_timeout_is_a_failure_with_partial_output_preserved(self):
         with tempfile.TemporaryDirectory() as root, patch.object(harness.subprocess, "run", side_effect=subprocess.TimeoutExpired(["cargo"], 1, output=b"partial build\n")):
             log = Path(root) / "timeout.log"
