@@ -345,9 +345,13 @@ impl App {
             .spacing(10)
             .align_y(alignment::Vertical::Center),
         );
-        if s.field.is_none()
-            && (!s.completed_units.is_empty() || matches!(s.sport, Sport::Tennis | Sport::Padel))
-        {
+        if s.field.is_none() {
+            let unit_label = if matches!(s.sport, Sport::Volleyball | Sport::Tennis | Sport::Padel)
+            {
+                "S"
+            } else {
+                "G"
+            };
             let mut strip = row![].spacing(6);
             for (i, unit) in s.completed_units.iter().enumerate() {
                 let points = if unit.score == [0, 0] {
@@ -357,7 +361,8 @@ impl App {
                 };
                 strip = strip.push(badge(
                     format!(
-                        "{}: {}-{}{}",
+                        "{}{}  {}-{}{}",
+                        unit_label,
                         i + 1,
                         points[0],
                         points[1],
@@ -371,9 +376,17 @@ impl App {
                     c,
                 ));
             }
-            if s.status == Status::Live && matches!(s.sport, Sport::Tennis | Sport::Padel) {
+            if s.status == Status::Live {
+                let score = if matches!(s.sport, Sport::Tennis | Sport::Padel) {
+                    s.games
+                } else {
+                    s.points
+                };
                 strip = strip.push(badge(
-                    format!("Games {}-{}", s.games[0], s.games[1]),
+                    format!(
+                        "{}{}  {}-{}  LIVE",
+                        unit_label, s.unit_number, score[0], score[1]
+                    ),
                     c.away,
                     c,
                 ));
