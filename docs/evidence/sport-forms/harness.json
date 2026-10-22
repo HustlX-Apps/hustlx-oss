@@ -1,0 +1,232 @@
+{
+  "version": 1,
+  "status": "passed",
+  "scope": "all",
+  "host": "Darwin 27.0.0 arm64",
+  "started_at": "2026-10-22T13:47:23.524436+00:00",
+  "gates": [
+    {
+      "name": "regression",
+      "command": [
+        "/Users/jaylupos/.cargo/bin/cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "--no-default-features",
+        "--test",
+        "racquet_operators",
+        "--test",
+        "operators",
+        "--test",
+        "sports",
+        "--test",
+        "sport_storage",
+        "--test",
+        "operator_storage",
+        "--test",
+        "field_sports",
+        "--test",
+        "field_session"
+      ],
+      "status": "passed",
+      "log": "/private/tmp/oss-forms-harness/regression.log",
+      "returncode": 0,
+      "tests": {
+        "passed": 55,
+        "failed": 0,
+        "ignored": 0
+      },
+      "seconds": 0.901
+    },
+    {
+      "name": "e2e",
+      "command": [
+        "/Users/jaylupos/.cargo/bin/cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "--bin",
+        "hustlx-oss",
+        "ui::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "status": "passed",
+      "log": "/private/tmp/oss-forms-harness/e2e.log",
+      "returncode": 0,
+      "tests": {
+        "passed": 26,
+        "failed": 0,
+        "ignored": 0
+      },
+      "seconds": 0.476
+    },
+    {
+      "name": "eval",
+      "command": [
+        "/Users/jaylupos/.cargo/bin/cargo",
+        "+stable",
+        "test",
+        "--locked",
+        "--no-default-features",
+        "--test",
+        "sport_evals",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "status": "passed",
+      "log": "/private/tmp/oss-forms-harness/eval.log",
+      "returncode": 0,
+      "tests": {
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      },
+      "cases": [
+        {
+          "assertions": 4,
+          "id": "basketball-attributed-score-undo",
+          "sport": "basketball"
+        },
+        {
+          "assertions": 4,
+          "id": "basketball-wrong-side-atomic",
+          "sport": "basketball"
+        },
+        {
+          "assertions": 6,
+          "id": "volleyball-attribution-undo",
+          "sport": "volleyball"
+        },
+        {
+          "assertions": 7,
+          "id": "volleyball-unsupported-and-early-result",
+          "sport": "volleyball"
+        },
+        {
+          "assertions": 6,
+          "id": "pickleball-attribution-undo",
+          "sport": "pickleball"
+        },
+        {
+          "assertions": 7,
+          "id": "pickleball-unsupported-and-early-result",
+          "sport": "pickleball"
+        },
+        {
+          "assertions": 6,
+          "id": "tennis-attribution-undo",
+          "sport": "tennis"
+        },
+        {
+          "assertions": 7,
+          "id": "tennis-unsupported-and-early-result",
+          "sport": "tennis"
+        },
+        {
+          "assertions": 6,
+          "id": "padel-attribution-undo",
+          "sport": "padel"
+        },
+        {
+          "assertions": 7,
+          "id": "padel-unsupported-and-early-result",
+          "sport": "padel"
+        },
+        {
+          "assertions": 6,
+          "id": "badminton-attribution-undo",
+          "sport": "badminton"
+        },
+        {
+          "assertions": 7,
+          "id": "badminton-unsupported-and-early-result",
+          "sport": "badminton"
+        },
+        {
+          "assertions": 6,
+          "id": "table_tennis-attribution-undo",
+          "sport": "table-tennis"
+        },
+        {
+          "assertions": 7,
+          "id": "table_tennis-unsupported-and-early-result",
+          "sport": "table-tennis"
+        },
+        {
+          "assertions": 10,
+          "id": "volleyball-set-closeout-undo",
+          "sport": "volleyball"
+        },
+        {
+          "assertions": 7,
+          "id": "pickleball-sideout-is-not-a-point",
+          "sport": "pickleball"
+        },
+        {
+          "assertions": 6,
+          "id": "tennis-double-fault-deuce-undo",
+          "sport": "tennis"
+        },
+        {
+          "assertions": 6,
+          "id": "padel-double-fault-deuce-undo",
+          "sport": "padel"
+        },
+        {
+          "assertions": 7,
+          "id": "table-tennis-deuce-service-and-unit-undo",
+          "sport": "table-tennis"
+        },
+        {
+          "assertions": 4,
+          "id": "badminton-cap-error-and-undo",
+          "sport": "badminton"
+        },
+        {
+          "assertions": 5,
+          "id": "football-own-goal-and-undo",
+          "sport": "football"
+        },
+        {
+          "assertions": 4,
+          "id": "football-period-clock-undo",
+          "sport": "football"
+        },
+        {
+          "assertions": 6,
+          "id": "football-shootout-separate-closeout",
+          "sport": "football"
+        },
+        {
+          "assertions": 5,
+          "id": "futsal-own-goal-and-undo",
+          "sport": "futsal"
+        },
+        {
+          "assertions": 4,
+          "id": "futsal-period-clock-undo",
+          "sport": "futsal"
+        },
+        {
+          "assertions": 6,
+          "id": "futsal-shootout-separate-closeout",
+          "sport": "futsal"
+        },
+        {
+          "assertions": 5,
+          "id": "futsal-second-half-foul-window",
+          "sport": "futsal"
+        }
+      ],
+      "seconds": 0.301
+    }
+  ],
+  "source": {
+    "head": "8bd5c0de31a13f805b55a52ece230c7136d05651",
+    "dirty": true,
+    "fixture_sha256": "bca5b80f83c69f2ce246b2e665cda90bae3f434c8deccf3805a26153d2ee7632"
+  }
+}

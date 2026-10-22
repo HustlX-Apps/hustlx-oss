@@ -1,10 +1,21 @@
 use super::*;
-use chrono::Local;
+use chrono::{Local, NaiveDate};
 use hustlx_oss::sport::Sport;
 use hustlx_oss::storage::{Error, MatchDraft, Result, SportMatchDraft};
 use iced::widget::{checkbox, column, pick_list, text_input};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MatchField {
+    Name,
+    Date,
+    Venue,
+    Home,
+    Away,
+    Rules,
+}
+
 pub(super) struct MatchForm {
+    pub(super) attempted: bool,
     name: String,
     date: String,
     venue: String,
@@ -14,6 +25,7 @@ pub(super) struct MatchForm {
 impl Default for MatchForm {
     fn default() -> Self {
         Self {
+            attempted: false,
             name: String::new(),
             date: Local::now().format("%Y-%m-%d").to_string(),
             venue: String::new(),
@@ -106,6 +118,10 @@ impl App {
                 self.screen = Screen::GameDay;
             }
             Message::CreateMatch => {
+                self.match_form.attempted = true;
+                if !self.match_issues().is_empty() {
+                    return Ok(());
+                }
                 self.operator_draft = None;
                 self.operator_chooser = None;
                 self.operator_finish = false;
@@ -149,6 +165,10 @@ impl App {
                 self.sport_setup = sports::SportSetup::default();
                 self.screen = Screen::GameDay;
             }
+            Message::ClearMatchRoster(side) => match side {
+                Side::Home => self.match_form.home = None,
+                Side::Away => self.match_form.away = None,
+            },
             Message::MatchName(value) => self.match_form.name = value,
             Message::MatchDate(value) => self.match_form.date = value,
             Message::MatchVenue(value) => self.match_form.venue = value,
@@ -162,12 +182,17 @@ impl App {
             }
             Message::TeamName(value) => self.team_name = value,
             Message::SaveTeam => {
+                self.team_attempted = true;
+                if text_issue(&self.team_name, "Team name", true, 200).is_some() {
+                    return Ok(());
+                }
                 let id = if let Some(id) = self.editing_team {
                     self.store()?.rename_team(id, &self.team_name)?;
                     id
                 } else {
                     self.store()?.create_team(&self.team_name)?
                 };
+                self.team_attempted = false;
                 self.team_name.clear();
                 self.editing_team = None;
                 self.refresh()?;
@@ -179,12 +204,14 @@ impl App {
                 self.refresh()?;
             }
             Message::EditTeam(id) => {
+                self.team_attempted = false;
                 if let Some(team) = self.teams.iter().find(|t| t.id == id) {
                     self.team_name = team.name.clone();
                     self.editing_team = Some(id);
                 }
             }
             Message::CancelTeam => {
+                self.team_attempted = false;
                 self.editing_team = None;
                 self.team_name.clear();
             }
@@ -202,6 +229,12 @@ impl App {
                 }
             }
             Message::SavePlayer => {
+                self.player_attempted = true;
+                if text_issue(&self.player_name, "Player name", true, 200).is_some()
+                    || text_issue(&self.player_jersey, "Jersey", false, 12).is_some()
+                {
+                    return Ok(());
+                }
                 let name = self.player_name.clone();
                 let jersey = self.player_jersey.clone();
                 let positions = self.player_positions.clone();
@@ -209,6 +242,7 @@ impl App {
                 self.session_mut()?
                     .store_mut()
                     .save_player(id, &name, &jersey, &positions)?;
+                self.player_attempted = false;
                 self.player_jersey.clear();
                 self.player_positions.clear();
                 self.player_name.clear();
@@ -216,6 +250,7 @@ impl App {
                 self.refresh()?;
             }
             Message::EditPlayer(id) => {
+                self.player_attempted = false;
                 if let Some(player) = self.players.iter().find(|p| p.id == id) {
                     self.player_name = player.name.clone();
                     let details = self.details.get(&id).cloned().unwrap_or_default();
@@ -225,6 +260,7 @@ impl App {
                 }
             }
             Message::CancelPlayer => {
+                self.player_attempted = false;
                 self.editing_player = None;
                 self.player_name.clear();
                 self.player_jersey.clear();
@@ -295,8 +331,65 @@ impl App {
             _ => self.matches_view(c),
         }
     }
+    fn match_issues(&self) -> Vec<(MatchField, String)> {
+        let f = &self.match_form;
+        let mut issues = Vec::new();
+        for (field, value, label, required, limit) in [
+            (MatchField::Name, f.name.as_str(), "Match name", true, 200),
+            (MatchField::Venue, f.venue.as_str(), "Venue", false, 300),
+        ] {
+            if let Some(error) = text_issue(value, label, required, limit) {
+                issues.push((field, error));
+            }
+        }
+        let date = f.date.trim();
+        if date.len() != 10 || NaiveDate::parse_from_str(date, "%Y-%m-%d").is_err() {
+            issues.push((MatchField::Date, "Enter a real date as YYYY-MM-DD.".into()));
+        }
+        if self.sport_setup.sport == Sport::Basketball {
+            for (field, team) in [(MatchField::Home, &f.home), (MatchField::Away, &f.away)] {
+                if team.is_none() {
+                    issues.push((field, "Choose a team from your library.".into()));
+                }
+            }
+            if f.home
+                .as_ref()
+                .zip(f.away.as_ref())
+                .is_some_and(|(a, b)| a.id == b.id)
+            {
+                issues.push((
+                    MatchField::Away,
+                    "Choose a different team for each side.".into(),
+                ));
+            }
+        } else {
+            for (field, value, label) in [
+                (MatchField::Home, &self.sport_setup.home, "Home name"),
+                (MatchField::Away, &self.sport_setup.away, "Away name"),
+            ] {
+                if let Some(error) = text_issue(value, label, true, 200) {
+                    issues.push((field, error));
+                }
+            }
+            if let Err(error) = self.sport_setup.rules() {
+                issues.push((MatchField::Rules, error.to_string()));
+            }
+        }
+        issues
+    }
     fn matches_view(&self, c: Colors) -> Element<'_, Message> {
         let f = &self.match_form;
+        let issues = self.match_issues();
+        let error = |key| {
+            f.attempted
+                .then(|| {
+                    issues
+                        .iter()
+                        .find(|(field, _)| *field == key)
+                        .map(|(_, e)| e.clone())
+                })
+                .flatten()
+        };
         let home_choices = self
             .teams
             .iter()
@@ -310,10 +403,6 @@ impl App {
             .cloned()
             .collect::<Vec<_>>();
         let mut form = column![
-            text("Create a match").size(23).font(HEADING),
-            text("Choose a sport and save a local match.")
-                .size(12)
-                .color(c.muted),
             field(
                 "Sport",
                 pick_list(
@@ -322,55 +411,175 @@ impl App {
                     Message::ChooseSport
                 )
                 .width(Fill)
-                .padding(10)
+                .text_size(14)
+                .padding(11)
+                .style(brand::select)
                 .into(),
                 c
             ),
-            field(
+            feedback(
                 "Match name",
-                text_input("Friday match", &f.name)
+                text_input("e.g. Evening friendly", &f.name)
                     .on_input(Message::MatchName)
-                    .padding(10)
+                    .size(14)
+                    .padding(11)
+                    .style(brand::input)
                     .into(),
+                error(MatchField::Name),
                 c
             ),
-            field(
-                "Date / YYYY-MM-DD",
-                text_input("YYYY-MM-DD", &f.date)
-                    .on_input(Message::MatchDate)
-                    .padding(10)
-                    .into(),
-                c
+            pair(
+                feedback(
+                    "Date / YYYY-MM-DD",
+                    text_input("YYYY-MM-DD", &f.date)
+                        .on_input(Message::MatchDate)
+                        .size(14)
+                        .padding(11)
+                        .style(brand::input)
+                        .into(),
+                    error(MatchField::Date),
+                    c
+                ),
+                feedback(
+                    "Venue (optional)",
+                    text_input("Court or venue", &f.venue)
+                        .on_input(Message::MatchVenue)
+                        .size(14)
+                        .padding(11)
+                        .style(brand::input)
+                        .into(),
+                    error(MatchField::Venue),
+                    c
+                ),
             ),
-            field(
-                "Venue (optional)",
-                text_input("Court or venue", &f.venue)
-                    .on_input(Message::MatchVenue)
-                    .padding(10)
-                    .into(),
+            section(
+                "Participants",
+                "Names and rosters are saved with this match.",
                 c
             ),
         ]
         .spacing(16);
-        let ready = if self.sport_setup.sport == Sport::Basketball {
-            form = form
-                .push(field("Team A / home",pick_list(home_choices,f.home.as_ref(),Message::HomeTeam).placeholder("Select Team A").width(Fill).padding(10).into(),c))
-                .push(field("Team B / away",pick_list(away_choices,f.away.as_ref(),Message::AwayTeam).placeholder("Select Team B").width(Fill).padding(10).into(),c))
-                .push(text("Team names and active rosters are copied into this match. Later library edits keep its history intact.").size(12).color(c.muted));
-            f.home.is_some() && f.away.is_some()
+        if self.sport_setup.sport == Sport::Basketball {
+            form = form.push(pair(
+                feedback(
+                    "Team A / home",
+                    pick_list(home_choices, f.home.as_ref(), Message::HomeTeam)
+                        .placeholder("Choose a team")
+                        .text_size(14)
+                        .style(brand::select)
+                        .padding(11)
+                        .width(Fill)
+                        .into(),
+                    error(MatchField::Home),
+                    c,
+                ),
+                feedback(
+                    "Team B / away",
+                    pick_list(away_choices, f.away.as_ref(), Message::AwayTeam)
+                        .placeholder("Choose a team")
+                        .text_size(14)
+                        .style(brand::select)
+                        .padding(11)
+                        .width(Fill)
+                        .into(),
+                    error(MatchField::Away),
+                    c,
+                ),
+            ));
+            if self.teams.iter().filter(|t| !t.archived).count() < 2 {
+                form = form
+                    .push(
+                        text("Basketball needs two saved teams. Empty rosters are welcome.")
+                            .size(12)
+                            .color(c.muted),
+                    )
+                    .push(
+                        button("Add teams")
+                            .on_press(Message::Navigate(Screen::Teams))
+                            .style(brand::secondary)
+                            .padding([10, 14]),
+                    );
+            } else {
+                form = form.push(text("Active players are copied into the match. Later library edits keep its history intact.").size(12).color(c.muted));
+            }
         } else {
-            form = form.push(self.sport_setup_view(c));
-            form=form.push(field("Home roster (optional)",pick_list(home_choices,f.home.as_ref(),Message::HomeTeam).placeholder("Named side only").width(Fill).padding(10).into(),c))
-                .push(field("Away roster (optional)",pick_list(away_choices,f.away.as_ref(),Message::AwayTeam).placeholder("Named side only").width(Fill).padding(10).into(),c))
-                .push(text("Selected rosters are copied into this match. Player actions and lineup controls use those saved identities.").size(11).color(c.muted));
-            !self.sport_setup.home.trim().is_empty() && !self.sport_setup.away.trim().is_empty()
-        };
-        form = form.push(
-            button(text("Create and open match").size(14))
-                .padding([12, 16])
-                .width(Fill)
-                .on_press_maybe((ready && !self.pending()).then_some(Message::CreateMatch)),
-        );
+            let (home_label, away_label) = self.sport_setup.side_labels();
+            form = form.push(pair(
+                feedback(
+                    home_label,
+                    text_input("Home name", &self.sport_setup.home)
+                        .on_input(|v| Message::SportInput(sports::RuleField::Home, v))
+                        .size(14)
+                        .padding(11)
+                        .style(brand::input)
+                        .into(),
+                    error(MatchField::Home),
+                    c,
+                ),
+                feedback(
+                    away_label,
+                    text_input("Away name", &self.sport_setup.away)
+                        .on_input(|v| Message::SportInput(sports::RuleField::Away, v))
+                        .size(14)
+                        .padding(11)
+                        .style(brand::input)
+                        .into(),
+                    error(MatchField::Away),
+                    c,
+                ),
+            ));
+            form = form
+                .push(pair(
+                    roster_field(
+                        "Home roster (optional)",
+                        home_choices,
+                        f.home.as_ref(),
+                        Side::Home,
+                        c,
+                    ),
+                    roster_field(
+                        "Away roster (optional)",
+                        away_choices,
+                        f.away.as_ref(),
+                        Side::Away,
+                        c,
+                    ),
+                ))
+                .push(
+                    text("Add a saved roster for player actions, or score with names only.")
+                        .size(12)
+                        .color(c.muted),
+                )
+                .push(section(
+                    "Match rules",
+                    "Defaults are ready. Adjust them to your agreed format.",
+                    c,
+                ))
+                .push(self.sport_setup_view(c));
+        }
+        let ready = issues.is_empty();
+        let footer = column![
+            text(if self.pending() {
+                "Resolve the pending save before creating another match."
+            } else if f.attempted && !ready {
+                "Review the highlighted fields above."
+            } else if ready {
+                "Ready to create. Saved on this computer."
+            } else {
+                "Complete the match details to begin."
+            })
+            .size(12)
+            .color(if f.attempted && !ready {
+                c.red
+            } else {
+                c.muted
+            }),
+            button(text("Create match").size(14).font(SEMIBOLD))
+                .on_press_maybe((!self.pending()).then_some(Message::CreateMatch))
+                .padding([12, 18])
+                .width(Fill),
+        ]
+        .spacing(9);
         let mut list = column![
             row![
                 text("Your matches").size(23).font(HEADING),
@@ -421,12 +630,29 @@ impl App {
             ));
         }
         row![
-            card(scrollable(form).spacing(8).height(Fill), c)
-                .width(350)
+            card(
+                column![
+                    column![
+                        text("Create a match").size(23).font(HEADING),
+                        text("Set up your match. Keep every point on this device.")
+                            .size(12)
+                            .color(c.muted)
+                    ]
+                    .spacing(5),
+                    scrollable(form).spacing(8).height(Fill),
+                    footer,
+                ]
+                .spacing(18)
                 .height(Fill),
+                c
+            )
+            .padding(20)
+            .width(Length::FillPortion(6))
+            .height(Fill),
             card(scrollable(list).spacing(8).height(Fill), c)
-                .width(Fill)
-                .height(Fill)
+                .padding(20)
+                .width(Length::FillPortion(5))
+                .height(Fill),
         ]
         .spacing(16)
         .height(Fill)
@@ -541,7 +767,7 @@ impl App {
                 badge(format!("{count} teams"), c.home, c)
             ]
             .align_y(alignment::Vertical::Center),
-            field(
+            feedback(
                 if self.editing_team.is_some() {
                     "Rename team"
                 } else {
@@ -549,10 +775,14 @@ impl App {
                 },
                 text_input("Team name", &self.team_name)
                     .on_input(Message::TeamName)
+                    .style(brand::input)
                     .on_submit(Message::SaveTeam)
                     .size(14)
                     .padding(10)
                     .into(),
+                self.team_attempted
+                    .then(|| text_issue(&self.team_name, "Team name", true, 200))
+                    .flatten(),
                 c
             ),
             controls,
@@ -624,6 +854,7 @@ impl App {
                                 "Jersey label (optional)",
                                 text_input("e.g. 12", &self.jersey)
                                     .on_input(Message::Jersey)
+                                    .style(brand::input)
                                     .size(14)
                                     .padding(10)
                                     .into(),
@@ -759,14 +990,16 @@ impl App {
         if self.editing_player.is_some() {
             controls = controls.push(button("Cancel").on_press(Message::CancelPlayer));
         }
-        let form=column![text(if self.editing_player.is_some(){"Edit player"}else{"Add a player"}).size(23).font(HEADING),
-            text("Players can be reused across team rosters.").size(12).color(c.muted),
-            field("Player name",text_input("Full name",&self.player_name).on_input(Message::PlayerName).on_submit(Message::SavePlayer).padding(10).into(),c),
-            field("Default jersey number",text_input("Optional, e.g. 00",&self.player_jersey).on_input(Message::PlayerJersey).padding(10).into(),c),
-            text("Positions (optional)").size(12).color(c.muted),
-            row(Position::ALL.into_iter().map(|p|checkbox(self.player_positions.contains(&p)).label(p.code()).on_toggle(move|enabled|Message::PlayerPosition(p,enabled)).into()).collect::<Vec<_>>()).spacing(9),
+        let form = column![
+            text(if self.editing_player.is_some() { "Edit player" } else { "Add a player" }).size(23).font(HEADING),
+            text("Save a player once, then add them to your team rosters.").size(12).color(c.muted),
+            feedback("Player name",text_input("Full name",&self.player_name).on_input(Message::PlayerName).on_submit(Message::SavePlayer).size(14).padding(11).style(brand::input).into(),self.player_attempted.then(|| text_issue(&self.player_name,"Player name",true,200)).flatten(),c),
+            feedback("Default jersey (optional)",text_input("e.g. 00",&self.player_jersey).on_input(Message::PlayerJersey).on_submit(Message::SavePlayer).size(14).padding(11).style(brand::input).into(),self.player_attempted.then(|| text_issue(&self.player_jersey,"Jersey",false,12)).flatten(),c),
+            text("Up to 12 characters. Blank team jerseys use this default.").size(12).color(c.muted),
+            text("Basketball positions (optional)").size(12).font(SEMIBOLD),
+            row(Position::ALL.into_iter().map(|p|checkbox(self.player_positions.contains(&p)).label(p.code()).text_size(13).on_toggle(move|enabled|Message::PlayerPosition(p,enabled)).into()).collect::<Vec<_>>()).spacing(12),
             controls,
-            text("Blank team jerseys inherit this default. Positions are copied into new matches. Archiving hides a player from new match rosters and can be reversed.").size(12).color(c.muted),
+            text("Saved matches keep their original player details. Archived players can be restored.").size(12).color(c.muted),
         ].spacing(16);
         let mut list = column![
             text("Player library").size(23).font(HEADING),
@@ -823,7 +1056,7 @@ impl App {
         }
         row![
             card(scrollable(form).spacing(8).height(Fill), c)
-                .width(330)
+                .width(380)
                 .height(Fill),
             card(scrollable(list).spacing(8).height(Fill), c)
                 .width(Fill)
@@ -834,8 +1067,12 @@ impl App {
         .into()
     }
 }
-fn field<'a>(label: &'a str, input: Element<'a, Message>, c: Colors) -> Element<'a, Message> {
-    column![text(label).size(12).color(c.muted), input]
+pub(super) fn field<'a>(
+    label: &'a str,
+    input: Element<'a, Message>,
+    c: Colors,
+) -> Element<'a, Message> {
+    column![text(label).size(12).font(SEMIBOLD).color(c.text), input]
         .spacing(6)
         .into()
 }
@@ -849,4 +1086,196 @@ fn empty<'a>(title: &'a str, description: &'a str, c: Colors) -> Element<'a, Mes
     )
     .padding([20, 6])
     .into()
+}
+
+fn text_issue(value: &str, label: &str, required: bool, limit: usize) -> Option<String> {
+    if required && value.trim().is_empty() {
+        Some(format!("{label} is required."))
+    } else if value.trim().chars().count() > limit {
+        Some(format!("Use {limit} characters or fewer."))
+    } else {
+        None
+    }
+}
+pub(super) fn feedback<'a>(
+    label: &'a str,
+    input: Element<'a, Message>,
+    error: Option<String>,
+    c: Colors,
+) -> Element<'a, Message> {
+    let mut field = column![field(label, input, c)].spacing(6).width(Fill);
+    if let Some(error) = error {
+        field = field.push(text(error).size(12).color(c.red));
+    }
+    field.into()
+}
+pub(super) fn pair<'a>(
+    left: Element<'a, Message>,
+    right: Element<'a, Message>,
+) -> Element<'a, Message> {
+    row![container(left).width(Fill), container(right).width(Fill)]
+        .spacing(14)
+        .into()
+}
+fn section<'a>(title: &'a str, help: &'a str, c: Colors) -> Element<'a, Message> {
+    column![
+        text(title).size(18).font(HEADING),
+        text(help).size(12).color(c.muted)
+    ]
+    .spacing(5)
+    .padding([6, 0])
+    .into()
+}
+
+fn roster_field<'a>(
+    label: &'a str,
+    choices: Vec<Entry>,
+    selected: Option<&'a Entry>,
+    side: Side,
+    c: Colors,
+) -> Element<'a, Message> {
+    let mut content = column![field(
+        label,
+        pick_list(choices, selected, move |t| if side == Side::Home {
+            Message::HomeTeam(t)
+        } else {
+            Message::AwayTeam(t)
+        })
+        .placeholder("Named side only")
+        .text_size(14)
+        .style(brand::select)
+        .padding(11)
+        .width(Fill)
+        .into(),
+        c
+    )]
+    .spacing(6);
+    if selected.is_some() {
+        content = content.push(
+            button(text("Remove roster").size(12))
+                .on_press(Message::ClearMatchRoster(side))
+                .style(brand::secondary)
+                .padding([6, 10]),
+        );
+    }
+    content.into()
+}
+
+#[cfg(test)]
+mod form_tests {
+    use super::*;
+
+    fn app() -> App {
+        let mut app = App::empty();
+        app.session = Some(Session::new(Store::open(":memory:").unwrap()));
+        app
+    }
+    fn send(app: &mut App, message: Message) {
+        let _ = app.update(message);
+    }
+
+    #[test]
+    fn team_and_player_form_feedback_preserves_invalid_drafts_until_corrected() {
+        let mut app = app();
+        send(&mut app, Message::SaveTeam);
+        assert!(app.error.is_none(), "team validation belongs in the form");
+        assert!(app.team_attempted);
+        assert!(app.teams.is_empty());
+        send(&mut app, Message::TeamName("North".into()));
+        send(&mut app, Message::SaveTeam);
+        assert_eq!(app.teams.len(), 1);
+        assert!(!app.team_attempted);
+        send(&mut app, Message::PlayerName("Alex".into()));
+        send(&mut app, Message::PlayerJersey("1234567890123".into()));
+        send(&mut app, Message::SavePlayer);
+        assert!(app.error.is_none(), "jersey validation belongs in the form");
+        assert!(app.player_attempted);
+        assert_eq!(app.player_name, "Alex");
+        assert!(app.players.is_empty());
+        send(&mut app, Message::PlayerJersey("00".into()));
+        send(&mut app, Message::SavePlayer);
+        assert_eq!(app.players.len(), 1);
+        assert!(!app.player_attempted);
+    }
+
+    #[test]
+    fn invalid_match_submission_keeps_draft_and_exposes_field_feedback() {
+        let mut app = app();
+        send(&mut app, Message::ChooseSport(Sport::Pickleball));
+        send(&mut app, Message::MatchDate("2026-02-30".into()));
+        send(&mut app, Message::CreateMatch);
+        assert!(app.error.is_none(), "validation belongs beside the fields");
+        assert!(app.match_form.attempted);
+        assert_eq!(app.match_form.date, "2026-02-30");
+        assert!(
+            app.match_issues()
+                .iter()
+                .any(|(field, _)| *field == MatchField::Date)
+        );
+        assert!(app.store().unwrap().matches().unwrap().is_empty());
+        for message in [
+            Message::MatchName("Evening doubles".into()),
+            Message::MatchDate("2026-10-22".into()),
+            Message::SportInput(sports::RuleField::Home, "North".into()),
+            Message::SportInput(sports::RuleField::Away, "South".into()),
+        ] {
+            send(&mut app, message);
+        }
+        assert!(
+            app.match_issues().is_empty(),
+            "corrections clear feedback before resubmitting"
+        );
+        send(&mut app, Message::CreateMatch);
+        assert_eq!(app.screen, Screen::GameDay);
+        assert_eq!(app.active().unwrap().summary.name, "Evening doubles");
+        assert!(!app.match_form.attempted);
+    }
+
+    #[test]
+    fn clearing_optional_roster_keeps_names_and_does_not_copy_players() {
+        let mut app = app();
+        let team = app.store().unwrap().create_team("North").unwrap();
+        let player = app.store().unwrap().create_player("Alex").unwrap();
+        app.store().unwrap().add_to_team(team, player, "7").unwrap();
+        app.refresh().unwrap();
+        let entry = app.teams[0].clone();
+        for message in [
+            Message::ChooseSport(Sport::Badminton),
+            Message::HomeTeam(entry),
+            Message::ClearMatchRoster(Side::Home),
+            Message::MatchName("Local friendly".into()),
+            Message::SportInput(sports::RuleField::Away, "South".into()),
+        ] {
+            send(&mut app, message);
+        }
+        assert_eq!(app.sport_setup.home, "North");
+        assert!(app.match_form.home.is_none());
+        send(&mut app, Message::CreateMatch);
+        assert!(app.error.is_none(), "{:?}", app.error);
+        assert!(app.game().team(Side::Home).players.is_empty());
+    }
+
+    #[test]
+    fn nine_sport_forms_validate_defaults_and_preserve_names_on_sport_change() {
+        let mut app = app();
+        for name in ["North", "South"] {
+            app.store().unwrap().create_team(name).unwrap();
+        }
+        app.refresh().unwrap();
+        let home = app.teams[0].clone();
+        let away = app.teams[1].clone();
+        send(&mut app, Message::HomeTeam(home));
+        send(&mut app, Message::AwayTeam(away));
+        send(&mut app, Message::MatchName("House rules".into()));
+        for sport in Sport::ALL {
+            send(&mut app, Message::ChooseSport(sport));
+            assert!(app.match_issues().is_empty(), "{sport}");
+            assert_eq!(app.sport_setup.home, "North");
+            assert_eq!(app.sport_setup.away, "South");
+            for dark in [false, true] {
+                app.dark = dark;
+                let _ = app.view();
+            }
+        }
+    }
 }

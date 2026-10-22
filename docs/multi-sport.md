@@ -6,6 +6,10 @@ HustlX OSS supports Basketball, Volleyball, Pickleball, Padel, Tennis (Long Tenn
 
 Choose the sport in Matches, enter its name/date/venue and two side names, and review the local rules. Optionally choose catalog team rosters for either side. Active player names and jerseys are copied into the match and retain their identities when the catalog changes. Named sides without players can still score. Rules are saved with the match.
 
+Match setup groups match details, participants and sport rules. Create match stays visible below the scrolling fields. Dates, required names and numeric settings show feedback beside their fields after submission, and corrections clear that feedback immediately. The form retains invalid drafts. Turning off a deciding match tiebreak excludes its hidden point target from validation.
+
+Participant labels follow the sport and singles/doubles format. Remove roster clears an optional roster while preserving the displayed side name. Changing sports preserves the names and resets rules to that sport's defaults. Basketball still requires two saved teams; Add teams opens the catalog when there are not enough.
+
 Use Lineup or Team sheet to select players in court or service order. Save confirms the draft; Cancel writes nothing. A substitution or libero board asks for one outgoing and one incoming player before confirmation. Count and sport-rule deviations are advisory. Valid saved side/player identity and on-court/bench membership remain structural requirements for exchanges.
 
 ## Volleyball
@@ -24,7 +28,7 @@ Side-outs rotate the receiving team's live court clockwise. Rotate records an ex
 | Badminton | Rally scoring, winning margin and hard cap; singles/doubles service slots. |
 | Table Tennis | Rally scoring, two-serve turns before deuce and one at deuce; singles or numbered doubles service order. |
 
-Select a participant for winner, ace, error or double-fault attribution where that action applies. The action uses the sport's existing scoring rules, including side-out. The scoreboard shows current point labels, games/sets and service slot. Lineup order assigns local participants to numbered slots; it does not infer online player identities. Serve home/away is a saved operator correction.
+Select a participant for winner, ace, error or double-fault attribution where that action applies. The action uses the sport's existing scoring rules, including side-out. The scoreboard shows current point labels, games/sets and service slot. Completed and live units have explicit S1/S2 (sets) or G1/G2 (games) labels, with LIVE on the current unit. Lineup order assigns local participants to numbered slots; it does not infer online player identities. Serve home/away is a saved operator correction.
 
 ## Football and Futsal
 

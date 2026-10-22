@@ -7,7 +7,7 @@ use hustlx_oss::{
 };
 use iced::widget::{checkbox, column, pick_list, text_input};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuleField {
     Home,
     Away,
@@ -62,36 +62,97 @@ impl SportSetup {
             match_tiebreak: r.match_tiebreak,
         }
     }
+    pub(super) fn side_labels(&self) -> (&'static str, &'static str) {
+        if self.sport.field() || self.sport == Sport::Volleyball {
+            ("Team A / home", "Team B / away")
+        } else if self.format == Format::Doubles || self.sport == Sport::Padel {
+            ("Pair A / home", "Pair B / away")
+        } else {
+            ("Player A / home", "Player B / away")
+        }
+    }
+    pub(super) fn issues(&self) -> Vec<(RuleField, String)> {
+        let mut issues = Vec::new();
+        let tennis = matches!(self.sport, Sport::Tennis | Sport::Padel);
+        let mut fields = vec![(
+            RuleField::Target,
+            &self.target,
+            if self.sport.field() { 180 } else { u16::MAX },
+        )];
+        if !self.sport.field() {
+            fields.push((RuleField::BestOf, &self.best_of, 255));
+            if tennis {
+                fields.push((RuleField::Tiebreak, &self.tiebreak, u16::MAX));
+                if self.match_tiebreak {
+                    fields.push((RuleField::Decider, &self.decider, u16::MAX));
+                }
+            } else {
+                fields.push((RuleField::Decider, &self.decider, u16::MAX));
+                fields.push((RuleField::WinBy, &self.win_by, u16::MAX));
+                if !self.cap.trim().is_empty() {
+                    fields.push((RuleField::Cap, &self.cap, u16::MAX));
+                }
+            }
+        }
+        for (field, value, max) in fields {
+            match value.trim().parse::<u16>() {
+                Ok(n) if n > 0 && n <= max => {
+                    if field == RuleField::BestOf && n.is_multiple_of(2) {
+                        issues.push((field, "Use an odd number: 1, 3, 5 or more.".into()));
+                    }
+                    if field == RuleField::Cap
+                        && [&self.target, &self.decider]
+                            .iter()
+                            .any(|v| v.trim().parse::<u16>().is_ok_and(|target| n < target))
+                    {
+                        issues.push((field, "The cap must reach both point targets.".into()));
+                    }
+                }
+                _ => issues.push((field, format!("Enter a whole number from 1 to {max}."))),
+            }
+        }
+        issues
+    }
     pub fn rules(&self) -> Result<Rules> {
-        fn number(value: &str, label: &str) -> Result<u16> {
+        if let Some((_, error)) = self.issues().first() {
+            return Err(Error::Validation(error.clone()));
+        }
+        let mut rules = Rules::defaults(self.sport);
+        // Only visible, applicable controls override defaults. Hidden draft values
+        // must not make an otherwise valid match impossible to create.
+        let number = |value: &str| {
             value
                 .trim()
-                .parse()
-                .map_err(|_| Error::Validation(format!("{label} must be a whole number.")))
+                .parse::<u16>()
+                .expect("validated visible field")
+        };
+        if self.sport.field() {
+            rules.period_minutes = number(&self.target);
+        } else {
+            rules.best_of = number(&self.best_of) as u8;
+            rules.target = number(&self.target);
+            rules.format = self.format;
+            rules.scoring = self.scoring;
+            rules.first_server = self.first_server;
+            if matches!(self.sport, Sport::Tennis | Sport::Padel) {
+                rules.tiebreak_target = number(&self.tiebreak);
+                rules.match_tiebreak = self.match_tiebreak;
+                if self.match_tiebreak {
+                    rules.decider_target = number(&self.decider);
+                }
+            } else {
+                rules.decider_target = number(&self.decider);
+                rules.win_by = number(&self.win_by);
+                rules.cap = if self.cap.trim().is_empty() {
+                    None
+                } else {
+                    Some(number(&self.cap))
+                };
+            }
         }
-        Ok(Rules {
-            best_of: number(&self.best_of, "Best of")?
-                .try_into()
-                .map_err(|_| Error::Validation("Best of is too large.".into()))?,
-            target: number(&self.target, "Target")?,
-            decider_target: number(&self.decider, "Deciding target")?,
-            win_by: number(&self.win_by, "Win by")?,
-            cap: if self.cap.trim().is_empty() {
-                None
-            } else {
-                Some(number(&self.cap, "Cap")?)
-            },
-            format: self.format,
-            scoring: self.scoring,
-            tiebreak_target: number(&self.tiebreak, "Tiebreak target")?,
-            match_tiebreak: self.match_tiebreak,
-            first_server: self.first_server,
-            period_minutes: if self.sport.field() {
-                number(&self.target, "Period minutes")?
-            } else {
-                0
-            },
-        })
+        hustlx_oss::sport::State::new(self.sport, rules.clone())
+            .map_err(|e| Error::Validation(e.to_string()))?;
+        Ok(rules)
     }
 }
 
@@ -131,71 +192,113 @@ impl App {
         Ok(())
     }
     pub(super) fn sport_setup_view(&self, c: Colors) -> Element<'_, Message> {
+        use library::{feedback, field, pair};
         let f = &self.sport_setup;
-        let racquet_games = matches!(f.sport, Sport::Tennis | Sport::Padel);
-        let mut form = column![
-            input(
-                "Side A / home",
-                "Player, pair or team name",
-                &f.home,
-                RuleField::Home,
-                c
-            ),
-            input(
-                "Side B / away",
-                "Player, pair or team name",
-                &f.away,
-                RuleField::Away,
-                c
-            ),
-            text(
-                "Names and rules are saved with this match. No team library or account is needed."
+        let tennis = matches!(f.sport, Sport::Tennis | Sport::Padel);
+        let issues = f.issues();
+        let input = |label, placeholder, value, key| {
+            let error = self
+                .match_form
+                .attempted
+                .then(|| {
+                    issues
+                        .iter()
+                        .find(|(field, _)| *field == key)
+                        .map(|(_, e)| e.clone())
+                })
+                .flatten();
+            feedback(
+                label,
+                text_input(placeholder, value)
+                    .on_input(move |v| Message::SportInput(key, v))
+                    .size(14)
+                    .padding(11)
+                    .style(brand::input)
+                    .into(),
+                error,
+                c,
             )
-            .size(12)
-            .color(c.muted),
-            text("Match rules").size(17).font(HEADING),
-        ]
-        .spacing(14);
+        };
         if f.sport.field() {
-            return form.push(input("Minutes per regulation period","20",&f.target,RuleField::Target,c))
-                .push(text("Two regulation periods. Extra time and shootout can be selected during the match. Local rules are advisory.").size(12).color(c.muted)).into();
+            return column![
+                input(
+                    "Minutes per regulation period",
+                    if f.sport == Sport::Football {
+                        "45"
+                    } else {
+                        "20"
+                    },
+                    &f.target,
+                    RuleField::Target
+                ),
+                text(if f.sport == Sport::Football {
+                    "Two halves. The clock counts up into stoppage time."
+                } else {
+                    "Two periods. The clock counts down and pauses at zero."
+                })
+                .size(12)
+                .color(c.muted),
+                text("Extra time and shootout are available during the match.")
+                    .size(12)
+                    .color(c.muted),
+            ]
+            .spacing(10)
+            .into();
         }
-        if !matches!(f.sport, Sport::Volleyball | Sport::Padel) {
-            form = form.push(
-                column![
-                    text("Format").size(12).color(c.muted),
-                    pick_list(
-                        [Format::Singles, Format::Doubles],
-                        Some(f.format),
-                        Message::SportFormat
-                    )
-                    .width(Fill)
-                    .padding(10),
-                ]
-                .spacing(6),
-            );
-        } else if f.sport == Sport::Padel {
-            form = form.push(text("Doubles / pairs").size(12).color(c.muted));
-        }
-        if matches!(f.sport, Sport::Pickleball | Sport::Tennis | Sport::Padel) {
-            let choices = match f.sport {
-                Sport::Pickleball => vec![Scoring::SideOut, Scoring::Rally],
-                Sport::Padel => vec![Scoring::Advantage, Scoring::NoAd, Scoring::StarPoint],
-                _ => vec![Scoring::Advantage, Scoring::NoAd],
-            };
-            form = form.push(
-                column![
-                    text("Scoring").size(12).color(c.muted),
+        let mut form = column![].spacing(16);
+        let format: Element<'_, Message> = if matches!(f.sport, Sport::Volleyball | Sport::Padel) {
+            field(
+                "Format",
+                text(if f.sport == Sport::Padel {
+                    "Doubles / pairs"
+                } else {
+                    "Teams"
+                })
+                .size(14)
+                .into(),
+                c,
+            )
+        } else {
+            field(
+                "Format",
+                pick_list(
+                    [Format::Singles, Format::Doubles],
+                    Some(f.format),
+                    Message::SportFormat,
+                )
+                .width(Fill)
+                .text_size(14)
+                .style(brand::select)
+                .padding(11)
+                .into(),
+                c,
+            )
+        };
+        let scoring: Element<'_, Message> =
+            if matches!(f.sport, Sport::Pickleball | Sport::Tennis | Sport::Padel) {
+                let choices = match f.sport {
+                    Sport::Pickleball => vec![Scoring::SideOut, Scoring::Rally],
+                    Sport::Padel => vec![Scoring::Advantage, Scoring::NoAd, Scoring::StarPoint],
+                    _ => vec![Scoring::Advantage, Scoring::NoAd],
+                };
+                field(
+                    "Scoring",
                     pick_list(choices, Some(f.scoring), Message::SportScoring)
                         .width(Fill)
-                        .padding(10),
-                ]
-                .spacing(6),
-            );
-        }
-        form = form
-            .push(input(
-                if f.sport == Sport::Volleyball || racquet_games {
+                        .text_size(14)
+                        .style(brand::select)
+                        .padding(11)
+                        .into(),
+                    c,
+                )
+            } else {
+                field("Scoring", text("Rally points").size(14).into(), c)
+            };
+        form = form.push(pair(format, scoring));
+        let sets = f.sport == Sport::Volleyball || tennis;
+        form = form.push(pair(
+            input(
+                if sets {
                     "Best of sets"
                 } else {
                     "Best of games"
@@ -203,10 +306,9 @@ impl App {
                 "3",
                 &f.best_of,
                 RuleField::BestOf,
-                c,
-            ))
-            .push(input(
-                if racquet_games {
+            ),
+            input(
+                if tennis {
                     "Games to win a set"
                 } else {
                     "Points to win"
@@ -214,20 +316,20 @@ impl App {
                 "Target",
                 &f.target,
                 RuleField::Target,
-                c,
-            ));
-        if racquet_games {
+            ),
+        ));
+        if tennis {
             form = form
                 .push(input(
                     "Tiebreak points",
                     "7",
                     &f.tiebreak,
                     RuleField::Tiebreak,
-                    c,
                 ))
                 .push(
                     checkbox(f.match_tiebreak)
                         .label("Match tiebreak in the deciding set")
+                        .text_size(13)
                         .on_toggle(Message::SportMatchTiebreak),
                 );
             if f.match_tiebreak {
@@ -236,53 +338,57 @@ impl App {
                     "10",
                     &f.decider,
                     RuleField::Decider,
-                    c,
                 ));
             }
         } else {
             form = form
-                .push(input(
-                    "Deciding set / game points",
-                    "Target",
-                    &f.decider,
-                    RuleField::Decider,
-                    c,
+                .push(pair(
+                    input(
+                        if sets {
+                            "Deciding set points"
+                        } else {
+                            "Deciding game points"
+                        },
+                        "Target",
+                        &f.decider,
+                        RuleField::Decider,
+                    ),
+                    input("Win by points", "2", &f.win_by, RuleField::WinBy),
                 ))
-                .push(input("Win by points", "2", &f.win_by, RuleField::WinBy, c))
                 .push(input(
                     "Point cap (optional)",
                     "No cap",
                     &f.cap,
                     RuleField::Cap,
-                    c,
                 ));
         }
-        form = form.push(
-            column![
-                text("First server").size(12).color(c.muted),
-                row![
-                    button("Side A")
-                        .on_press(Message::SportFirstServer(Side::Home))
-                        .style(if f.first_server == Side::Home {
-                            button::primary
-                        } else {
-                            brand::secondary
-                        }),
-                    button("Side B")
-                        .on_press(Message::SportFirstServer(Side::Away))
-                        .style(if f.first_server == Side::Away {
-                            button::primary
-                        } else {
-                            brand::secondary
-                        }),
-                ]
-                .spacing(8),
-                text("Adjust the defaults to your agreed match rules before starting.")
-                    .size(12)
-                    .color(c.muted),
+        form = form.push(field(
+            "First server",
+            row![
+                button("Home / A")
+                    .on_press(Message::SportFirstServer(Side::Home))
+                    .padding([10, 16])
+                    .style(if f.first_server == Side::Home {
+                        button::primary
+                    } else {
+                        brand::secondary
+                    }),
+                button("Away / B")
+                    .on_press(Message::SportFirstServer(Side::Away))
+                    .padding([10, 16])
+                    .style(if f.first_server == Side::Away {
+                        button::primary
+                    } else {
+                        brand::secondary
+                    }),
             ]
-            .spacing(8),
-        );
+            .spacing(10)
+            .into(),
+            c,
+        ));
+        if f.sport == Sport::Pickleball && f.scoring == Scoring::SideOut {
+            form = form.push(text("Only the serving side earns a point. Record every rally winner; service changes automatically.").size(12).color(c.muted));
+        }
         form.into()
     }
     pub(super) fn sport_view(&self, c: Colors) -> Element<'_, Message> {
@@ -290,26 +396,37 @@ impl App {
     }
 }
 
-fn input<'a>(
-    label: &'a str,
-    placeholder: &str,
-    value: &'a str,
-    field: RuleField,
-    c: Colors,
-) -> Element<'a, Message> {
-    column![
-        text(label).size(12).color(c.muted),
-        text_input(placeholder, value)
-            .on_input(move |s| Message::SportInput(field, s))
-            .padding(10)
-    ]
-    .spacing(6)
-    .into()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn setup_feedback_targets_numeric_fields_and_ignores_hidden_match_tiebreak() {
+        let mut setup = SportSetup::new(Sport::Pickleball);
+        setup.best_of = "2".into();
+        setup.cap = "5".into();
+        let issues = setup.issues();
+        assert!(issues.iter().any(|(field, _)| *field == RuleField::BestOf));
+        assert!(issues.iter().any(|(field, _)| *field == RuleField::Cap));
+        assert!(setup.rules().is_err());
+        let mut setup = SportSetup::new(Sport::Tennis);
+        setup.match_tiebreak = true;
+        setup.decider = "oops".into();
+        assert!(setup.rules().is_err());
+        setup.match_tiebreak = false;
+        assert!(
+            setup.rules().is_ok(),
+            "a hidden unused field must not block creation"
+        );
+        let mut setup = SportSetup::new(Sport::Football);
+        setup.target = "181".into();
+        assert!(
+            setup
+                .issues()
+                .iter()
+                .any(|(field, _)| *field == RuleField::Target)
+        );
+    }
 
     fn app(store: Store) -> App {
         let mut app = App::empty();
@@ -531,7 +648,9 @@ mod tests {
             Message::SportInput(RuleField::BestOf, "abc".into()),
         );
         let _ = app.update(Message::CreateMatch);
-        assert!(app.error.as_ref().unwrap().contains("whole number"));
+        assert!(app.error.is_none());
+        assert!(app.match_form.attempted);
+        assert!(app.sport_setup.issues().iter().any(|(field, error)| *field == RuleField::BestOf && error.contains("whole number")));
         assert!(app.active().is_none());
         assert_eq!(app.sport_setup.best_of, "abc");
         assert_eq!(app.screen, Screen::Matches);

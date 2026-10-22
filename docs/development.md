@@ -115,3 +115,7 @@ Run `python3 scripts/run_sport_harness.py` for local regression, all native App/
 Native smoke: use an isolated library, create roster-backed and named-side matches, verify volleyball Kill/Attack/Error, side-out rotation, lineup cancellation, confirmed substitution/libero, Undo and restart. For racquet sports inspect singles/doubles service, point labels and game/set strip; for Football/Futsal inspect clock direction, own goals, team/player attribution, paused next period, shootout and confirmed draw/decisive closeout. Keep the six volleyball positions visible at 1100x760, and inspect both themes. See [port evidence](evidence/sport-ui-port/README.md).
 
 The [native keyboard/UI audit](evidence/native-sport-e2e/README.md) records real macOS key and pointer input for all nine sports, scoring/undo/closeout and full-app restart. Its five fixes have controller regression coverage and focused native input evidence. The Python harness runs App/controller tests alongside its nine mandatory E2E journeys; the recorded native GUI lane remains separate.
+
+## Form regression evidence
+
+The October 22 grouped form update is covered in [native form evidence](evidence/sport-forms/README.md). App regressions exercise invalid dates and numeric settings, correction without draft loss, hidden match-tiebreak values, optional roster removal, all nine setup defaults and team/player validation. These run through the local checker and sport harness. Inspect the fixed Create match footer at the minimum window size whenever changing form height, field errors or sport controls.

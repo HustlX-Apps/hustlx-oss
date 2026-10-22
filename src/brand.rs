@@ -1,5 +1,5 @@
 //! Offline HustlX identity, aligned with the web theme and native font assets.
-use iced::widget::{button, pick_list, svg};
+use iced::widget::{button, pick_list, svg, text_input};
 use iced::{
     Background, Border, Color, Font, Theme,
     theme::{
@@ -166,4 +166,23 @@ pub fn select(theme: &Theme, status: pick_list::Status) -> pick_list::Style {
             radius: 6.0.into(),
         },
     }
+}
+
+/// Shared library form styling, with readable placeholders and a visible focus ring.
+pub fn input(theme: &Theme, status: text_input::Status) -> text_input::Style {
+    let mut style = text_input::default(theme, status);
+    let c = Colors::new(theme.extended_palette().is_dark);
+    style.placeholder = c.muted;
+    style.border.radius = 7.0.into();
+    style.border.color = if matches!(status, text_input::Status::Focused { .. }) {
+        c.home
+    } else {
+        c.muted.scale_alpha(0.65)
+    };
+    style.border.width = if matches!(status, text_input::Status::Focused { .. }) {
+        2.0
+    } else {
+        1.0
+    };
+    style
 }
