@@ -69,6 +69,77 @@ fn pickleball_rally_scores_receiver_wins() {
 }
 
 #[test]
+fn pickleball_singles_never_projects_a_second_player_after_sideout_at_odd_score() {
+    let mut r = Rules::defaults(Sport::Pickleball);
+    r.format = Format::Singles;
+    let mut s = State::new(Sport::Pickleball, r).unwrap();
+    for side in [Home, Away, Away, Home, Away] {
+        s.apply(Command::Rally(side)).unwrap();
+        assert_eq!((s.server_slot, s.receiver_slot), (1, 1));
+    }
+    assert_eq!(s.points, [1, 1]);
+}
+
+#[test]
+fn pickleball_doubles_server_correction_uses_right_court_and_keeps_that_player() {
+    for scoring in [Scoring::SideOut, Scoring::Rally] {
+        let mut r = Rules::defaults(Sport::Pickleball);
+        r.scoring = scoring;
+        let mut s = State::new(Sport::Pickleball, r).unwrap();
+        points(&mut s, Home, 1); // Home slot 2 now occupies the right court.
+        s.apply(Command::SetServer(Home)).unwrap();
+        assert_eq!((s.server_slot, s.receiver_slot, s.server_number), (2, 1, 1));
+        points(&mut s, Home, 1);
+        assert_eq!((s.server_slot, s.receiver_slot), (2, 2));
+        if scoring == Scoring::SideOut {
+            points(&mut s, Away, 1);
+            assert_eq!((s.server, s.server_slot, s.receiver_slot), (Home, 1, 1));
+        }
+    }
+}
+
+#[test]
+fn badminton_server_correction_preserves_courts_and_selects_by_score_parity() {
+    let mut s = state(Sport::Badminton);
+    points(&mut s, Home, 1);
+    points(&mut s, Away, 1);
+    assert_eq!((s.server_slot, s.receiver_slot), (2, 1));
+    s.apply(Command::SetServer(Away)).unwrap();
+    assert_eq!((s.server_slot, s.receiver_slot), (2, 1));
+    points(&mut s, Away, 1);
+    assert_eq!((s.server_slot, s.receiver_slot), (2, 2));
+}
+
+#[test]
+fn badminton_custom_decider_changes_ends_at_its_own_midpoint_once() {
+    let mut r = Rules::defaults(Sport::Badminton);
+    r.best_of = 1;
+    r.decider_target = 15;
+    let mut s = State::new(Sport::Badminton, r).unwrap();
+    points(&mut s, Home, 7);
+    assert_eq!(s.ends_changed, 0);
+    points(&mut s, Home, 1);
+    assert_eq!(s.ends_changed, 1);
+    points(&mut s, Away, 8);
+    assert_eq!(s.ends_changed, 1);
+}
+
+#[test]
+fn volleyball_midset_service_correction_preserves_next_sets_opening_side() {
+    let mut r = Rules::defaults(Sport::Volleyball);
+    r.target = 3;
+    let mut s = State::new(Sport::Volleyball, r).unwrap();
+    points(&mut s, Home, 1);
+    s.apply(Command::SetServer(Away)).unwrap();
+    points(&mut s, Home, 2);
+    assert_eq!((s.unit_number, s.server), (2, Away));
+    // A correction before the first rally deliberately changes the opening side.
+    s.apply(Command::SetServer(Home)).unwrap();
+    points(&mut s, Home, 3);
+    assert_eq!((s.unit_number, s.server), (3, Away));
+}
+
+#[test]
 fn table_tennis_service_switches_every_two_then_every_one_at_deuce() {
     let mut s = state(Sport::TableTennis);
     points(&mut s, Home, 2);

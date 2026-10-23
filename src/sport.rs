@@ -486,7 +486,9 @@ impl State {
             Command::Timeout(side) => self.operator.timeout(side),
             Command::SetServer(side) => {
                 self.server = side;
-                self.unit_first_server = side;
+                if self.sport != Sport::Volleyball || self.points == [0, 0] {
+                    self.unit_first_server = side;
+                }
                 self.service_anchor = if self.sport == Sport::TableTennis {
                     self.table_service_turn()
                 } else {
@@ -510,6 +512,18 @@ impl State {
                 };
                 self.server_slot = 1;
                 self.receiver_slot = 1;
+                if self.rules.format == Format::Doubles
+                    && matches!(self.sport, Sport::Badminton | Sport::Pickleball)
+                {
+                    // A correction selects from the existing courts, not a new pair order.
+                    let court = if self.sport == Sport::Badminton {
+                        usize::from(self.points[idx(side)] % 2)
+                    } else {
+                        0
+                    };
+                    self.server_slot = self.courts[idx(side)][court];
+                    self.receiver_slot = self.courts[idx(other(side))][court];
+                }
                 self.refresh_service();
                 Ok(())
             }
@@ -554,8 +568,11 @@ impl State {
                 self.server_number = 1;
                 self.server_slot = self.courts[idx(side)][0];
             }
-            self.receiver_slot = self.courts[idx(other(self.server))]
-                [usize::from(self.points[idx(self.server)] % 2)];
+            self.receiver_slot = if self.rules.format == Format::Singles {
+                1
+            } else {
+                self.courts[idx(other(self.server))][usize::from(self.points[idx(self.server)] % 2)]
+            };
             return Ok(());
         }
         add(&mut self.points[idx(side)])?;
@@ -593,7 +610,7 @@ impl State {
         }
         let threshold = match self.sport {
             Sport::TableTennis => Some(5),
-            Sport::Badminton => Some(self.rules.target.div_ceil(2)),
+            Sport::Badminton => Some(self.rules.decider_target.div_ceil(2)),
             Sport::Volleyball => Some(self.rules.decider_target.div_ceil(2)),
             _ => None,
         };

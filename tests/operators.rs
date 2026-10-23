@@ -135,3 +135,36 @@ fn a_new_volleyball_set_restores_explicit_starters_and_resets_set_counters() {
     assert_eq!(s.operator.timeouts, [0, 0]);
     assert_eq!(s.operator.substitutions, [0, 0]);
 }
+
+#[test]
+fn six_volleyball_sideouts_restore_both_courts_and_serving_rallies_do_not_rotate() {
+    let mut s = State::new(Sport::Volleyball, Rules::defaults(Sport::Volleyball)).unwrap();
+    for (side, players) in [
+        (Home, [1, 2, 3, 4, 5, 6, 0, 0, 0, 0, 0]),
+        (Away, [7, 8, 9, 10, 11, 12, 0, 0, 0, 0, 0]),
+    ] {
+        s.apply(Command::Lineup { side, players }).unwrap();
+    }
+    let starters = s.operator.starters.clone();
+    for turn in 1..=6 {
+        s.apply(Command::Rally(Away)).unwrap();
+        let mut expected = starters[1].clone();
+        expected.rotate_left(turn % 6);
+        assert_eq!(s.operator.court[1], expected);
+        s.apply(Command::Rally(Away)).unwrap();
+        assert_eq!(s.operator.court[1], expected);
+        s.apply(Command::Player {
+            side: Away,
+            player: Some(7),
+            action: PlayerAction::Dig,
+        })
+        .unwrap();
+        assert_eq!(s.operator.court[1], expected);
+        s.apply(Command::Rally(Home)).unwrap();
+        let mut expected = starters[0].clone();
+        expected.rotate_left(turn % 6);
+        assert_eq!(s.operator.court[0], expected);
+    }
+    assert_eq!(s.operator.court, starters);
+    assert_eq!(s.points, [6, 12]);
+}

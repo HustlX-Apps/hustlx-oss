@@ -119,3 +119,9 @@ The [native keyboard/UI audit](evidence/native-sport-e2e/README.md) records real
 ## Form regression evidence
 
 The October 22 grouped form update is covered in [native form evidence](evidence/sport-forms/README.md). App regressions exercise invalid dates and numeric settings, correction without draft loss, hidden match-tiebreak values, optional roster removal, all nine setup defaults and team/player validation. These run through the local checker and sport harness. Inspect the fixed Create match footer at the minimum window size whenever changing form height, field errors or sport controls.
+
+## Rotation and service checks
+
+The [October 23 evidence](evidence/rotation-service/README.md) covers participant service markers, a full six-side-out volleyball cycle, live-slot substitution/libero exchanges, service corrections and exact state recovery. `tests/operator_storage.rs::rotation_service_exchange_undo_survive_process_restart` starts a separate test process, reopens all six affected sports and undoes every recorded command back through the saved snapshots. Marker tests also reject inferred roster identities and hide live roles on decided/completed matches.
+
+If a copied or shared Cargo target cache makes the packaging preview point at another checkout, run `cargo +stable clean --package xtask` in the intended checkout, then rerun its local checker. The packaging helper embeds `CARGO_MANIFEST_DIR` at compilation. A green cached dry-run with another checkout's archive path is not packaging evidence for the current checkout. Check the printed Archive path before recording a pass.
