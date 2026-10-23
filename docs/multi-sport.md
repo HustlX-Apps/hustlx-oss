@@ -18,6 +18,8 @@ The six court positions use the same mirrored P1-P6 layout as the web console. E
 
 Side-outs rotate the receiving team's live court clockwise. Rotate records an explicit correction. Substitution and libero exchanges preserve the outgoing player's slot and accept agreed house rules. A new set restores the last explicit starters and resets timeout/substitution/libero bookkeeping. Local counts remain in the action history and can be undone; these are not complete official reports or playing-time statistics.
 
+The serving side's P1 player has a SERVING marker, and the central panel names that player. Rotation, substitution and libero exchanges update the marker from the live slot. Volleyball has no single designated receiver, so no individual RECEIVING marker is inferred. A mid-set Serve home/away correction changes current service without changing the next set's alternating opening side. A correction at 0-0 explicitly changes that set's opening side.
+
 ## Racquet sports
 
 | Sport | Scoring and service |
@@ -29,6 +31,10 @@ Side-outs rotate the receiving team's live court clockwise. Rotate records an ex
 | Table Tennis | Rally scoring, two-serve turns before deuce and one at deuce; singles or numbered doubles service order. |
 
 Select a participant for winner, ace, error or double-fault attribution where that action applies. The action uses the sport's existing scoring rules, including side-out. The scoreboard shows current point labels, games/sets and service slot. Completed and live units have explicit S1/S2 (sets) or G1/G2 (games) labels, with LIVE on the current unit. Lineup order assigns local participants to numbered slots; it does not infer online player identities. Serve home/away is a saved operator correction.
+
+SERVING and RECEIVING markers identify the participants in the current service slots. The central panel repeats their names and slot numbers. A saved roster alone does not assign service: choose an explicit Lineup first. Without a lineup or an occupied slot, the summary shows the side name and slot instead. Markers disappear when the match is decided or completed. Pickleball's server number is the turn within a side, separate from a participant's stable lineup slot.
+
+In doubles Pickleball, Serve home/away starts a corrected turn with the player currently in that side's right court, preserving the pair's court history. In doubles Badminton, it selects the server and receiver from the existing courts using the serving score's parity. Singles always uses participant slot 1. A custom Badminton deciding-game end-change cue uses that game's configured target. Undo and restart reconstruct the corrected service and markers from the same saved commands.
 
 ## Football and Futsal
 
@@ -49,3 +55,5 @@ Basketball retains its existing v2 statistics, lineup and clock workflow. Basket
 Full official statistical reports, exports/backups, remote sync, staff-card attribution, field reduction timers, detailed event editing, tournament/league management and Swimming/Taekwondo desks are outside this port. Advanced hosted workflows are not implied by a matching native layout. Rules are configurable local policies, not federation certification. Missing external rule provenance never prevents local play.
 
 Tennis and Padel result-ready/completed scoreboards show the last completed set's game score with LAST SET GAMES. Deciding match tiebreaks show MATCH TIEBREAK POINTS instead. Live point labels remain 0/15/30/40/AD. Escape dismisses lineup/exchange drafts, the Volleyball outcome chooser and result review without saving; Enter submits field-clock corrections. See [native keyboard/UI evidence](evidence/native-sport-e2e/README.md).
+
+See [rotation and service evidence](evidence/rotation-service/README.md) for the October 23 service fixes, full volleyball rotation cycle, live-slot exchanges and fresh-process Undo/restart checks. Saved event rows are retained; reopening older matches uses the corrected service and end-change projection without rewriting their scores or statistics.

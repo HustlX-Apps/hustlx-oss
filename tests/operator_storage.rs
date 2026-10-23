@@ -5,6 +5,163 @@ use hustlx_oss::{
     storage::{Error, SportMatchDraft, Store},
 };
 use uuid::Uuid;
+
+#[test]
+fn rotation_service_exchange_undo_survive_process_restart() {
+    use hustlx_oss::sport::State;
+    use std::{fs, path::Path, process::Command as Process};
+    const REOPEN: &str = "HUSTLX_OSS_ROTATION_REOPEN";
+    if let Some(root) = std::env::var_os(REOPEN) {
+        let root = Path::new(&root);
+        let expected: Vec<(i64, Vec<State>)> =
+            serde_json::from_slice(&fs::read(root.join("expected.json")).unwrap()).unwrap();
+        let mut db = Store::open(root.join("library.sqlite3")).unwrap();
+        for (id, snapshots) in expected {
+            let mut saved = db.load_match(id).unwrap();
+            assert_eq!(saved.sport_state.as_ref(), snapshots.last());
+            for before in snapshots.iter().rev().skip(1) {
+                saved = db
+                    .undo_sport(id, saved.summary.revision, Uuid::new_v4())
+                    .unwrap();
+                assert_eq!(saved.sport_state.as_ref(), Some(before));
+                assert_eq!(
+                    db.load_match(id).unwrap().sport_state.as_ref(),
+                    Some(before)
+                );
+            }
+        }
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let mut db = Store::open(root.path().join("library.sqlite3")).unwrap();
+    let mut teams = [0; 2];
+    let mut roster = [Vec::new(), Vec::new()];
+    for i in 0..2 {
+        teams[i] = db.create_team("Same club").unwrap();
+        for _ in 0..8 {
+            let player = db.create_player("Alex").unwrap();
+            db.add_to_team(teams[i], player, "7").unwrap();
+            roster[i].push(player);
+        }
+    }
+    let mut expected = Vec::new();
+    for sport in [
+        Sport::Volleyball,
+        Sport::Pickleball,
+        Sport::Badminton,
+        Sport::TableTennis,
+        Sport::Tennis,
+        Sport::Padel,
+    ] {
+        let mut saved = db
+            .create_sport_match_with_teams(&draft(sport), teams.map(Some))
+            .unwrap();
+        let id = saved.summary.id;
+        let mut snapshots = vec![saved.sport_state.clone().unwrap()];
+        let count = if sport == Sport::Volleyball { 6 } else { 2 };
+        let mut commands = Vec::new();
+        for (side, players) in [(Home, &roster[0]), (Away, &roster[1])] {
+            let mut slots = [0; 11];
+            slots[..count].copy_from_slice(&players[..count]);
+            commands.push(Command::Lineup {
+                side,
+                players: slots,
+            });
+        }
+        commands.extend([
+            Command::Rally(Home),
+            Command::Rally(Away),
+            Command::Rally(Home),
+            Command::SetServer(Home),
+        ]);
+        for command in commands {
+            saved = db
+                .record_sport(id, saved.summary.revision, Uuid::new_v4(), command)
+                .unwrap();
+            snapshots.push(saved.sport_state.clone().unwrap());
+        }
+        let outgoing = saved.sport_state.as_ref().unwrap().operator.court[0][0];
+        if sport == Sport::Volleyball {
+            assert_eq!(outgoing, roster[0][1]);
+            assert_eq!(
+                saved.sport_state.as_ref().unwrap().operator.starters[0][0],
+                roster[0][0]
+            );
+        }
+        let command = Command::Exchange {
+            side: Home,
+            outgoing,
+            incoming: roster[0][6],
+            libero: false,
+        };
+        let uuid = Uuid::new_v4();
+        let revision = saved.summary.revision;
+        saved = db.record_sport(id, revision, uuid, command).unwrap();
+        snapshots.push(saved.sport_state.clone().unwrap());
+        assert_eq!(
+            db.record_sport(id, revision, uuid, command)
+                .unwrap()
+                .summary
+                .revision,
+            saved.summary.revision
+        );
+        assert_eq!(
+            saved.sport_state.as_ref().unwrap().operator.court[0][0],
+            roster[0][6]
+        );
+        if sport == Sport::Volleyball {
+            saved = db
+                .record_sport(
+                    id,
+                    saved.summary.revision,
+                    Uuid::new_v4(),
+                    Command::Exchange {
+                        side: Home,
+                        outgoing: roster[0][6],
+                        incoming: roster[0][7],
+                        libero: true,
+                    },
+                )
+                .unwrap();
+            assert_eq!(
+                saved.sport_state.as_ref().unwrap().operator.libero[0],
+                Some(roster[0][7])
+            );
+            snapshots.push(saved.sport_state.clone().unwrap());
+            saved = db
+                .record_sport(
+                    id,
+                    saved.summary.revision,
+                    Uuid::new_v4(),
+                    Command::Rotate(Home),
+                )
+                .unwrap();
+            snapshots.push(saved.sport_state.clone().unwrap());
+        }
+        expected.push((id, snapshots));
+    }
+    fs::write(
+        root.path().join("expected.json"),
+        serde_json::to_vec(&expected).unwrap(),
+    )
+    .unwrap();
+    drop(db);
+    let output = Process::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "rotation_service_exchange_undo_survive_process_restart",
+            "--nocapture",
+        ])
+        .env(REOPEN, root.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
 fn draft(sport: Sport) -> SportMatchDraft {
     SportMatchDraft {
         name: "Evening match".into(),

@@ -18,6 +18,34 @@ pub(super) struct OperatorDraft {
     incoming: Option<i64>,
 }
 
+fn operator_service_slot(state: &State, side: Side) -> Option<u8> {
+    if state.status != Status::Live || state.sport.field() || state.sport == Sport::Basketball {
+        return None;
+    }
+    if side == state.server {
+        Some(if state.sport == Sport::Volleyball {
+            1
+        } else {
+            state.server_slot
+        })
+    } else if state.sport == Sport::Volleyball {
+        None
+    } else {
+        Some(state.receiver_slot)
+    }
+}
+
+fn operator_service_role(state: &State, side: Side, player: i64) -> Option<&'static str> {
+    let slot = operator_service_slot(state, side)?.checked_sub(1)?;
+    (state.operator.court[index(side)].get(usize::from(slot)) == Some(&player)).then_some(
+        if side == state.server {
+            "SERVING"
+        } else {
+            "RECEIVING"
+        },
+    )
+}
+
 fn operator_match_tiebreak_result(state: &State) -> bool {
     matches!(state.sport, Sport::Tennis | Sport::Padel)
         && state.status != Status::Live
@@ -586,15 +614,23 @@ impl App {
         .spacing(4);
         if s.sport == Sport::Volleyball {
             content = content.push(
-                text(format!(
-                    "K {} B {} A {} D {}",
-                    s.operator.count(side, id, A::Kill),
-                    s.operator.count(side, id, A::Block),
-                    s.operator.count(side, id, A::Ace),
-                    s.operator.count(side, id, A::Dig)
-                ))
-                .size(9)
-                .color(c.muted),
+                row![
+                    text(format!(
+                        "K {} B {} A {} D {}",
+                        s.operator.count(side, id, A::Kill),
+                        s.operator.count(side, id, A::Block),
+                        s.operator.count(side, id, A::Ace),
+                        s.operator.count(side, id, A::Dig)
+                    ))
+                    .size(9)
+                    .color(c.muted)
+                    .width(Fill),
+                    text(operator_service_role(s, side, id).unwrap_or(""))
+                        .size(9)
+                        .font(BOLD)
+                        .color(c.green),
+                ]
+                .spacing(3),
             );
             content = content.push(
                 text(format!(
@@ -641,15 +677,23 @@ impl App {
             }
         } else if !s.sport.field() {
             content = content.push(
-                text(format!(
-                    "W {} / A {} / ERR {}",
-                    s.operator.count(side, id, A::Winner),
-                    s.operator.count(side, id, A::Ace),
-                    u32::from(s.operator.count(side, id, A::UnforcedError))
-                        + u32::from(s.operator.count(side, id, A::ForcedError))
-                ))
-                .size(10)
-                .color(c.muted),
+                row![
+                    text(format!(
+                        "W {} / A {} / ERR {}",
+                        s.operator.count(side, id, A::Winner),
+                        s.operator.count(side, id, A::Ace),
+                        u32::from(s.operator.count(side, id, A::UnforcedError))
+                            + u32::from(s.operator.count(side, id, A::ForcedError))
+                    ))
+                    .size(10)
+                    .color(c.muted)
+                    .width(Fill),
+                    text(operator_service_role(s, side, id).unwrap_or(""))
+                        .size(9)
+                        .font(BOLD)
+                        .color(c.green),
+                ]
+                .spacing(3),
             );
         }
         card(content, c).padding(5).width(Fill).into()
@@ -698,6 +742,30 @@ impl App {
             .spacing(8)
         ]
         .spacing(10);
+        if s.status == Status::Live {
+            let mut service = column![
+                text(format!(
+                    "SERVING  {}",
+                    self.operator_service_identity(s.server)
+                ))
+                .size(12)
+                .font(SEMIBOLD)
+                .color(c.green),
+            ]
+            .spacing(5);
+            let receiving = hustlx_oss::operator::opposite(s.server);
+            if operator_service_slot(s, receiving).is_some() {
+                service = service.push(
+                    text(format!(
+                        "RECEIVING  {}",
+                        self.operator_service_identity(receiving)
+                    ))
+                    .size(12)
+                    .color(c.text),
+                );
+            }
+            pad = pad.push(card(service, c).padding(10));
+        }
         if s.sport == Sport::Pickleball {
             pad=pad.push(text("Record the rally winner. In side-out scoring, a receiving rally changes service without adding a point.").size(11).color(c.muted));
         }
@@ -906,12 +974,110 @@ impl App {
         }
         card(feed, c).padding(12).width(Fill).into()
     }
+
+    fn operator_service_identity(&self, side: Side) -> String {
+        let s = self.active().unwrap().sport_state.as_ref().unwrap();
+        let Some(slot) = operator_service_slot(s, side) else {
+            return String::new();
+        };
+        let player = slot
+            .checked_sub(1)
+            .and_then(|slot| s.operator.court[index(side)].get(usize::from(slot)))
+            .and_then(|id| self.game().player(side, *id));
+        format!(
+            "{} / {}{slot}",
+            player.map_or(self.game().team(side).name.as_str(), |p| p.name.as_str()),
+            if s.sport == Sport::Volleyball {
+                "P"
+            } else {
+                "slot "
+            },
+        )
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hustlx_oss::sport::{Format, Rules};
     use hustlx_oss::storage::Store;
+
+    #[test]
+    fn service_markers_follow_volleyball_live_slots_and_exchanges() {
+        let mut s = State::new(Sport::Volleyball, Rules::defaults(Sport::Volleyball)).unwrap();
+        assert_eq!(operator_service_role(&s, Side::Home, 1), None);
+        for (side, players) in [
+            (Side::Home, [1, 2, 3, 4, 5, 6, 0, 0, 0, 0, 0]),
+            (Side::Away, [7, 8, 9, 10, 11, 12, 0, 0, 0, 0, 0]),
+        ] {
+            s.apply(Command::Lineup { side, players }).unwrap();
+        }
+        assert_eq!(operator_service_role(&s, Side::Home, 1), Some("SERVING"));
+        assert_eq!(operator_service_role(&s, Side::Away, 7), None);
+        s.apply(Command::Rally(Side::Away)).unwrap();
+        assert_eq!(operator_service_role(&s, Side::Away, 8), Some("SERVING"));
+        assert_eq!(operator_service_role(&s, Side::Away, 7), None);
+        s.apply(Command::Exchange {
+            side: Side::Away,
+            outgoing: 8,
+            incoming: 13,
+            libero: true,
+        })
+        .unwrap();
+        assert_eq!(operator_service_role(&s, Side::Away, 13), Some("SERVING"));
+        assert_eq!(operator_service_role(&s, Side::Away, 8), None);
+        s.status = Status::Completed;
+        assert_eq!(operator_service_role(&s, Side::Away, 13), None);
+    }
+
+    #[test]
+    fn racquet_markers_resolve_explicit_slots_without_roster_or_name_fallbacks() {
+        for sport in [
+            Sport::Pickleball,
+            Sport::Badminton,
+            Sport::TableTennis,
+            Sport::Tennis,
+            Sport::Padel,
+        ] {
+            let mut r = Rules::defaults(sport);
+            r.format = Format::Doubles;
+            let mut s = State::new(sport, r).unwrap();
+            assert_eq!(operator_service_role(&s, Side::Home, 1), None);
+            for (side, players) in [
+                (Side::Home, [1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                (Side::Away, [3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            ] {
+                s.apply(Command::Lineup { side, players }).unwrap();
+            }
+            for _ in 0..5 {
+                let server = s.operator.court[index(s.server)][usize::from(s.server_slot - 1)];
+                let receiving = hustlx_oss::operator::opposite(s.server);
+                let receiver = s.operator.court[index(receiving)][usize::from(s.receiver_slot - 1)];
+                assert_eq!(
+                    operator_service_role(&s, s.server, server),
+                    Some("SERVING"),
+                    "{sport:?}"
+                );
+                assert_eq!(
+                    operator_service_role(&s, receiving, receiver),
+                    Some("RECEIVING"),
+                    "{sport:?}"
+                );
+                assert_eq!(operator_service_role(&s, receiving, 99), None);
+                s.apply(Command::Rally(Side::Home)).unwrap();
+            }
+            s.status = Status::Decided;
+            for id in 1..=4 {
+                assert_eq!(operator_service_role(&s, Side::Home, id), None);
+                assert_eq!(operator_service_role(&s, Side::Away, id), None);
+            }
+        }
+        for sport in [Sport::Football, Sport::Futsal] {
+            let mut s = State::new(sport, Rules::defaults(sport)).unwrap();
+            s.operator.court[0] = vec![1];
+            assert_eq!(operator_service_role(&s, Side::Home, 1), None);
+        }
+    }
     fn send(app: &mut App, message: Message) {
         let _ = app.update(message);
         assert!(app.error.is_none(), "{:?}", app.error);
