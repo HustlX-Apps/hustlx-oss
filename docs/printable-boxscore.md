@@ -8,6 +8,12 @@ Every row in **Matches** has a **Box score** button, and the basketball Game Day
 
 The Box score screen shows the same sheet as native rows and carries **Export PDF**. The export opens the operating system's save dialog with a suggested name such as `2026-10-24-batangas-blazers-vs-lipa-city-hawks-boxscore.pdf`, writes a temporary file beside the target and renames it over the target, then shows the saved path with **Open** and **Show in folder**. Cancelling the dialog writes nothing. A failed write shows the error inline and the button reads **Retry export**. A path without `.pdf` gets the extension appended.
 
+## Stats CSV
+
+**Export CSV** sits beside **Export PDF** and follows the same save flow, with a suggested name such as `2026-10-24-batangas-blazers-vs-lipa-city-hawks-stats.csv` and `.csv` appended when missing. The layout mirrors the web Game Day CSV: blank-line separated sections for a `Section,Field,Value` summary (generation time, sport, match, date, venue, saved clock status, sides and scores), the line score when it prints on the sheet, one row per rostered player plus a `Totals` row per team, and play-by-play with the saved period, game and shot clock, team, jersey, player, stat and points.
+
+Unlike the PDF, shooting is split into made and attempted columns (`FGM`, `FGA`, `FG%` and so on) so spreadsheets never read `4-9` as a date, starters are a `Starter` Yes/No column, and plus-minus is headed `PlusMinus`. Percentages are whole numbers and blank without attempts. `MIN`, `PlusMinus` and play clock cells are blank under the same rules that omit them from the sheet. The file starts with a UTF-8 byte order mark so Excel reads accented names, and text that a spreadsheet would run as a formula gets a leading apostrophe.
+
 ## What prints for basketball
 
 The page carries the match name, date and venue, the two side names with the saved score, and the saved clock reading such as `P4 00:00` in place of a status word, because the app has no basketball completion state and the sheet never invents one.
@@ -28,7 +34,7 @@ The layout measures every string with the bundled Inter and Exo fonts and fits t
 
 ## Limits in this slice
 
-Only basketball matches produce a sheet; other sports show "Box score is not available for this sport yet." There is no organizer name or logo yet. Matches without event timing lose the line score, game flow and minutes.
+Only basketball matches produce a sheet or a stats CSV; other sports show "Box score is not available for this sport yet." and both export buttons stay disabled. There is no organizer name or logo yet. Matches without event timing lose the line score, game flow and minutes.
 
 ## Verification
 

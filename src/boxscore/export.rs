@@ -1,4 +1,4 @@
-//! Box score PDF export helpers: the default file name and the atomic write.
+//! Box score PDF and stats CSV export helpers: default file names and the atomic write.
 //! No dialog or platform code lives here, so these compile without the desktop feature.
 use crate::storage::MatchSummary;
 use std::ffi::OsString;
@@ -32,25 +32,46 @@ pub fn default_file_name(summary: &MatchSummary) -> String {
     )
 }
 
-/// Appends `.pdf` unless the path already ends in it (any case).
-pub fn with_pdf_extension(path: PathBuf) -> PathBuf {
-    let is_pdf = path
+/// `<date>-<home>-vs-<away>-stats.csv`, safe for any file system.
+pub fn default_csv_file_name(summary: &MatchSummary) -> String {
+    format!(
+        "{}-{}-vs-{}-stats.csv",
+        slug(&summary.date),
+        slug(&summary.home_name),
+        slug(&summary.away_name)
+    )
+}
+
+/// Appends `.<ext>` unless the path already ends in it (any case).
+pub fn with_extension(path: PathBuf, ext: &str) -> PathBuf {
+    let has_ext = path
         .extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"));
-    if is_pdf {
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case(ext));
+    if has_ext {
         path
     } else {
         let mut os: OsString = path.into_os_string();
-        os.push(".pdf");
+        os.push(".");
+        os.push(ext);
         PathBuf::from(os)
     }
+}
+
+/// Appends `.pdf` unless the path already ends in it (any case).
+pub fn with_pdf_extension(path: PathBuf) -> PathBuf {
+    with_extension(path, "pdf")
 }
 
 /// Writes `<target>.tmp` then renames it over `<target>` (with `.pdf` ensured), so a reader
 /// never sees a half-written file. Returns the final path.
 pub fn write_atomic(target: &Path, bytes: &[u8]) -> std::io::Result<PathBuf> {
-    let target = with_pdf_extension(target.to_path_buf());
+    write_atomic_as(target, "pdf", bytes)
+}
+
+/// [`write_atomic`] for any extension, which is appended when missing.
+pub fn write_atomic_as(target: &Path, ext: &str, bytes: &[u8]) -> std::io::Result<PathBuf> {
+    let target = with_extension(target.to_path_buf(), ext);
     let mut tmp_os: OsString = target.clone().into_os_string();
     tmp_os.push(".tmp");
     let tmp = PathBuf::from(tmp_os);
@@ -81,6 +102,32 @@ mod tests {
             default_file_name(&s),
             "2026-10-24-batangas-blazers-vs-lipa-city-hawks-boxscore.pdf"
         );
+    }
+
+    #[test]
+    fn csv_name_and_extension_follow_the_pdf_rules() {
+        let s = MatchSummary {
+            date: "2026-10-24".into(),
+            home_name: "Batangas Blazers".into(),
+            away_name: "Lipa City Hawks!".into(),
+            ..fixtures::basketball_full().summary
+        };
+        assert_eq!(
+            default_csv_file_name(&s),
+            "2026-10-24-batangas-blazers-vs-lipa-city-hawks-stats.csv"
+        );
+        assert_eq!(
+            with_extension("a/b".into(), "csv"),
+            PathBuf::from("a/b.csv")
+        );
+        assert_eq!(
+            with_extension("a/B.CSV".into(), "csv"),
+            PathBuf::from("a/B.CSV")
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let written = write_atomic_as(&dir.path().join("x"), "csv", b"a,b").unwrap();
+        assert_eq!(written, dir.path().join("x.csv"));
+        assert!(!dir.path().join("x.csv.tmp").exists());
     }
 
     #[test]

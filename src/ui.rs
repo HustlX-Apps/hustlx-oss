@@ -97,7 +97,7 @@ pub enum Message {
     RetrySave,
     OpenMatch(i64),
     ShowBoxscore(i64),
-    ExportBoxscore,
+    ExportBoxscore(boxscores::ExportFormat),
     BoxscoreTarget(Option<std::path::PathBuf>),
     BoxscoreWritten(std::result::Result<std::path::PathBuf, String>),
     OpenBoxscoreFile,
@@ -170,8 +170,8 @@ pub struct App {
     lineup_history: bool,
     lineup_saving: bool,
     boxscore: Option<boxscores::BoxscoreState>,
-    /// Native save dialog for the box score PDF; tests replace it so no panel opens.
-    pick_export_target: fn(String) -> iced::Task<Message>,
+    /// Native save dialog for the box score PDF or stats CSV; tests replace it so no panel opens.
+    pick_export_target: fn(String, boxscores::ExportFormat) -> iced::Task<Message>,
 }
 impl Default for App {
     fn default() -> Self {
@@ -257,7 +257,7 @@ impl App {
             | Message::SaveLineup
             | Message::ShowLineupHistory) => self.update_lineups(message),
             message @ (Message::ShowBoxscore(..)
-            | Message::ExportBoxscore
+            | Message::ExportBoxscore(..)
             | Message::BoxscoreTarget(..)
             | Message::BoxscoreWritten(..)
             | Message::OpenBoxscoreFile
