@@ -1,5 +1,6 @@
 //! Renderer-independent basketball state. SQLite owns durable local matches.
 
+pub mod boxscore;
 pub mod clock;
 pub mod field_sport;
 pub mod hotkeys;
