@@ -228,6 +228,10 @@ mod tests {
         assert_eq!(flow.title, "Game flow");
         assert_eq!(flow.lines.len(), 4);
         assert!(flow.lines[0].starts_with("Biggest lead: A "));
+        let f = game_flow(full_saved.game.plays()).expect("stamped");
+        assert!(f.lead_changes >= 1, "{f:?}");
+        assert!(f.times_tied >= 1, "{f:?}");
+        assert!(f.biggest_lead[0] > 0 && f.biggest_lead[1] > 0, "{f:?}");
         assert!(full.teams.iter().all(|t| {
             t.notes
                 .last()

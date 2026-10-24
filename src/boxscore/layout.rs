@@ -746,6 +746,29 @@ mod tests {
     }
 
     #[test]
+    fn header_labels_and_totals_never_truncate_for_fixtures() {
+        let m = Metrics::bundled();
+        for fixture in [fixtures::basketball_full, fixtures::basketball_oversized] {
+            let l = layout(&sheet(fixture), &m).unwrap();
+            // Header rows carry the "PTS" label; totals rows carry "Totals".
+            let rows: Vec<f32> = texts(&l)
+                .filter(|(t, _, size, font)| {
+                    *size == l.body_size
+                        && *font == FontId::BodyBold
+                        && (*t == "PTS" || *t == "Totals")
+                })
+                .map(|(_, y, ..)| y)
+                .collect();
+            assert_eq!(rows.len(), 4, "two header rows and two totals rows");
+            for (text, y, size, font) in texts(&l) {
+                if size == l.body_size && font == FontId::BodyBold && rows.contains(&y) {
+                    assert!(!text.ends_with(ELLIPSIS), "truncated: {text}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn full_fixture_fits_at_step_zero() {
         let m = Metrics::bundled();
         let l = layout(&sheet(fixtures::basketball_full), &m).unwrap();

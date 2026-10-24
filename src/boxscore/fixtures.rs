@@ -48,20 +48,28 @@ fn plays(stamped: bool, active: usize, periods: u32) -> Vec<Play> {
         Stat::Turnover,
         Stat::Foul,
     ];
+    let play = |side: Side, base: i64, n: usize, k: usize, period: u32, slot: (usize, usize)| {
+        let (sn, sk) = slot;
+        Play {
+            side,
+            player_id: base + n as i64,
+            stat: CYCLE[(n + k + period as usize) % CYCLE.len()],
+            clock: stamped
+                .then(|| clock_at(period, 540_000 - (sn as u64 * 20_000) - sk as u64 * 5_000)),
+        }
+    };
+    // Possessions alternate in clock order. Each player keeps the same stats per
+    // period; the away roster runs in reverse so the lead swings both ways.
     let mut out = Vec::new();
-    for (side, base) in [(Side::Home, HOME_BASE), (Side::Away, AWAY_BASE)] {
-        for period in 1..=periods {
-            for n in 1..=active {
-                for k in 0..3 {
-                    let stat = CYCLE[(n + k + period as usize) % CYCLE.len()];
-                    out.push(Play {
-                        side,
-                        player_id: base + n as i64,
-                        stat,
-                        clock: stamped.then(|| {
-                            clock_at(period, 540_000 - (n as u64 * 20_000) - k as u64 * 5_000)
-                        }),
-                    });
+    for period in 1..=periods {
+        for n in 1..=active {
+            for k in 0..3 {
+                let home = play(Side::Home, HOME_BASE, n, k, period, (n, k));
+                let away = play(Side::Away, AWAY_BASE, active + 1 - n, k, period, (n, k));
+                if (n + k + period as usize).is_multiple_of(2) {
+                    out.extend([home, away]);
+                } else {
+                    out.extend([away, home]);
                 }
             }
         }
