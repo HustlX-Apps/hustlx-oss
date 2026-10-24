@@ -2,6 +2,7 @@
 use crate::{sport::Sport, storage::SavedMatch};
 
 pub mod basketball;
+pub mod export;
 pub mod fixtures;
 pub mod layout;
 pub mod minutes;

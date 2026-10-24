@@ -97,6 +97,11 @@ pub enum Message {
     RetrySave,
     OpenMatch(i64),
     ShowBoxscore(i64),
+    ExportBoxscore,
+    BoxscoreTarget(Option<std::path::PathBuf>),
+    BoxscoreWritten(std::result::Result<std::path::PathBuf, String>),
+    OpenBoxscoreFile,
+    RevealBoxscoreFile,
     CreateMatch,
     ClearMatchRoster(Side),
     MatchName(String),
@@ -165,6 +170,8 @@ pub struct App {
     lineup_history: bool,
     lineup_saving: bool,
     boxscore: Option<boxscores::BoxscoreState>,
+    /// Native save dialog for the box score PDF; tests replace it so no panel opens.
+    pick_export_target: fn(String) -> iced::Task<Message>,
 }
 impl Default for App {
     fn default() -> Self {
@@ -218,6 +225,7 @@ impl App {
             lineup_history: false,
             lineup_saving: false,
             boxscore: None,
+            pick_export_target: boxscores::export_task,
         }
     }
     fn update_core(&mut self, message: Message) {
@@ -248,7 +256,12 @@ impl App {
             | Message::ClearLineup
             | Message::SaveLineup
             | Message::ShowLineupHistory) => self.update_lineups(message),
-            message @ Message::ShowBoxscore(..) => self.update_boxscore(message).map(drop),
+            message @ (Message::ShowBoxscore(..)
+            | Message::ExportBoxscore
+            | Message::BoxscoreTarget(..)
+            | Message::BoxscoreWritten(..)
+            | Message::OpenBoxscoreFile
+            | Message::RevealBoxscoreFile) => self.update_boxscore(message).map(drop),
             Message::Select(side, id) => {
                 if let Some(s) = &mut self.session {
                     s.select(side, id);

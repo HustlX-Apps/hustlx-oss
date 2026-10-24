@@ -69,7 +69,15 @@ impl App {
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
         self.now = Instant::now();
-        if matches!(message, Message::ShowBoxscore(..)) {
+        if matches!(
+            message,
+            Message::ShowBoxscore(..)
+                | Message::ExportBoxscore
+                | Message::BoxscoreTarget(..)
+                | Message::BoxscoreWritten(..)
+                | Message::OpenBoxscoreFile
+                | Message::RevealBoxscoreFile
+        ) {
             let task = match self.update_boxscore(message) {
                 Ok(task) => {
                     if !self.pending() {

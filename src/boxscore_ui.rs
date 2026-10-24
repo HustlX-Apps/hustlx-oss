@@ -2,7 +2,9 @@
 use super::*;
 use crate::brand::BODY;
 use hustlx_oss::boxscore::{
-    Align, Block, Column as SheetColumn, LineScore, Row, Sheet, SheetResult, build,
+    Align, Block, Column as SheetColumn, LineScore, Row, Sheet, SheetResult, build, export,
+    layout::{Metrics, layout},
+    pdf::render,
 };
 use hustlx_oss::storage::Result;
 use iced::Task;
@@ -10,21 +12,54 @@ use iced::widget::column;
 use iced::widget::scrollable::{Direction, Scrollbar};
 use std::path::PathBuf;
 
-// match_id and export are read by the export flow.
-#[allow(dead_code)]
 pub struct BoxscoreState {
-    pub match_id: i64,
+    /// Suggested PDF name, fixed when the match is loaded so the dialog needs no storage read.
+    pub file_name: String,
     pub sheet: SheetResult,
     pub export: ExportStatus,
 }
 
-// Saving, Saved and Failed are driven by the export flow.
-#[allow(dead_code)]
 pub enum ExportStatus {
     Idle,
     Saving,
     Saved(PathBuf),
     Failed(String),
+}
+
+/// Export button caption for each export state.
+pub(super) fn export_label(status: &ExportStatus) -> &'static str {
+    match status {
+        ExportStatus::Failed(_) => "Retry export",
+        ExportStatus::Saving => "Saving…",
+        ExportStatus::Idle | ExportStatus::Saved(_) => "Export PDF",
+    }
+}
+
+/// Lays out and renders the loaded sheet; the message is what the screen shows when it cannot.
+pub(super) fn render_sheet(state: &BoxscoreState) -> std::result::Result<Vec<u8>, String> {
+    match &state.sheet {
+        SheetResult::Ready(sheet) => layout(sheet, &Metrics::bundled())
+            .map(|laid_out| render(&laid_out))
+            .map_err(|_| "The box score did not fit on one page.".to_owned()),
+        SheetResult::Unsupported { .. } => {
+            Err("Box score is not available for this sport yet.".to_owned())
+        }
+    }
+}
+
+/// Native save dialog on the Iced executor; `None` means the operator cancelled.
+pub(super) fn export_task(default_name: String) -> Task<Message> {
+    Task::perform(
+        rfd::AsyncFileDialog::new()
+            .set_file_name(default_name)
+            .add_filter("PDF", &["pdf"])
+            .save_file(),
+        |handle| Message::BoxscoreTarget(handle.map(|h| h.path().to_path_buf())),
+    )
+}
+
+fn save_error(error: &std::io::Error) -> String {
+    format!("Could not save the PDF: {error}. Check the folder, then try again.")
 }
 
 const CHARS_PER_WEIGHT: usize = 7;
@@ -55,16 +90,75 @@ fn wide<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
 
 impl App {
     pub(super) fn update_boxscore(&mut self, message: Message) -> Result<Task<Message>> {
-        if let Message::ShowBoxscore(id) = message {
-            let saved = self.store()?.load_match(id)?;
-            let generated_on = chrono::Local::now().format("%Y-%m-%d").to_string();
-            let sheet = build(&saved, None, &generated_on, env!("CARGO_PKG_VERSION"));
-            self.boxscore = Some(BoxscoreState {
-                match_id: id,
-                sheet,
-                export: ExportStatus::Idle,
-            });
-            self.navigate(Screen::BoxScore)?;
+        match message {
+            Message::ShowBoxscore(id) => {
+                let saved = self.store()?.load_match(id)?;
+                let generated_on = chrono::Local::now().format("%Y-%m-%d").to_string();
+                let sheet = build(&saved, None, &generated_on, env!("CARGO_PKG_VERSION"));
+                self.boxscore = Some(BoxscoreState {
+                    file_name: export::default_file_name(&saved.summary),
+                    sheet,
+                    export: ExportStatus::Idle,
+                });
+                self.navigate(Screen::BoxScore)?;
+            }
+            Message::ExportBoxscore => {
+                if let Some(state) = self.boxscore.as_mut()
+                    && matches!(state.sheet, SheetResult::Ready(_))
+                {
+                    state.export = ExportStatus::Saving;
+                    return Ok((self.pick_export_target)(state.file_name.clone()));
+                }
+            }
+            Message::BoxscoreTarget(None) => {
+                if let Some(state) = self.boxscore.as_mut() {
+                    state.export = ExportStatus::Idle;
+                }
+            }
+            Message::BoxscoreTarget(Some(path)) => {
+                if let Some(state) = self.boxscore.as_mut() {
+                    match render_sheet(state) {
+                        Ok(bytes) => {
+                            state.export = ExportStatus::Saving;
+                            return Ok(Task::perform(
+                                async move {
+                                    export::write_atomic(&path, &bytes)
+                                        .map_err(|error| save_error(&error))
+                                },
+                                Message::BoxscoreWritten,
+                            ));
+                        }
+                        Err(message) => state.export = ExportStatus::Failed(message),
+                    }
+                }
+            }
+            Message::BoxscoreWritten(result) => {
+                if let Some(state) = self.boxscore.as_mut() {
+                    state.export = match result {
+                        Ok(path) => ExportStatus::Saved(path),
+                        Err(message) => ExportStatus::Failed(message),
+                    };
+                }
+            }
+            Message::OpenBoxscoreFile | Message::RevealBoxscoreFile => {
+                if let Some(state) = self.boxscore.as_mut()
+                    && let ExportStatus::Saved(path) = &state.export
+                {
+                    let reveal = matches!(message, Message::RevealBoxscoreFile);
+                    let target = if reveal {
+                        path.parent().unwrap_or(path).to_path_buf()
+                    } else {
+                        path.clone()
+                    };
+                    if let Err(error) = open::that(&target) {
+                        state.export = ExportStatus::Failed(format!(
+                            "Could not open {}: {error}",
+                            target.display()
+                        ));
+                    }
+                }
+            }
+            _ => {}
         }
         Ok(Task::none())
     }
@@ -91,18 +185,43 @@ impl App {
     }
 
     pub(super) fn boxscore_view(&self, c: Colors) -> Element<'_, Message> {
+        let state = self.boxscore.as_ref();
+        let status = state.map_or(&ExportStatus::Idle, |s| &s.export);
+        let can_export = state.is_some_and(|s| matches!(s.sheet, SheetResult::Ready(_)))
+            && !matches!(status, ExportStatus::Saving);
         let bar = row![
             button(text("Back to Matches").size(12))
                 .on_press(Message::Navigate(Screen::Matches))
                 .padding([8, 12])
                 .style(brand::secondary),
             Space::new().width(Fill),
-            button(text("Export PDF").size(12))
-                .on_press_maybe(None)
+            button(text(export_label(status)).size(12))
+                .on_press_maybe(can_export.then_some(Message::ExportBoxscore))
                 .padding([8, 12]),
         ]
         .spacing(10)
         .align_y(alignment::Vertical::Center);
+        let status_line: Option<Element<'_, Message>> = match status {
+            ExportStatus::Saved(path) => Some(
+                row![
+                    text(format!("Saved to {}", path.display()))
+                        .size(11)
+                        .color(c.muted)
+                        .width(Fill),
+                    button(text("Open").size(11))
+                        .on_press(Message::OpenBoxscoreFile)
+                        .style(brand::secondary),
+                    button(text("Show in folder").size(11))
+                        .on_press(Message::RevealBoxscoreFile)
+                        .style(brand::secondary),
+                ]
+                .spacing(8)
+                .align_y(alignment::Vertical::Center)
+                .into(),
+            ),
+            ExportStatus::Failed(message) => Some(text(message).size(11).color(c.away).into()),
+            ExportStatus::Idle | ExportStatus::Saving => None,
+        };
         let body: Element<'_, Message> = match self.boxscore.as_ref().map(|s| &s.sheet) {
             Some(SheetResult::Ready(sheet)) => sheet_view(sheet, c),
             _ => card(
@@ -114,10 +233,11 @@ impl App {
             .width(Fill)
             .into(),
         };
-        column![bar, scrollable(body).height(Fill)]
-            .spacing(14)
-            .height(Fill)
-            .into()
+        let mut page = column![bar].spacing(14).height(Fill);
+        if let Some(line) = status_line {
+            page = page.push(line);
+        }
+        page.push(scrollable(body).height(Fill)).into()
     }
 }
 
@@ -235,11 +355,14 @@ mod tests {
     use hustlx_oss::boxscore::SheetResult;
     use hustlx_oss::sport::{Rules, Sport};
     use hustlx_oss::storage::{MatchDraft, SportMatchDraft};
+    use iced::Task;
     use std::path::Path;
 
     fn app(path: &Path) -> App {
         let mut app = App::empty();
         app.session = Some(Session::new(Store::open(path).unwrap()));
+        // Never open a native dialog from a test thread.
+        app.pick_export_target = |_| Task::none();
         app
     }
 
@@ -287,7 +410,6 @@ mod tests {
         assert_eq!(app.screen, Screen::BoxScore);
         assert!(app.active().is_none(), "box score must not open the match");
         let state = app.boxscore.as_ref().unwrap();
-        assert_eq!(state.match_id, id);
         assert!(matches!(state.sheet, SheetResult::Ready(_)));
         assert!(matches!(state.export, ExportStatus::Idle));
         render(&mut app);
@@ -371,5 +493,73 @@ mod tests {
             header.len() + 2,
             "name has two words, then one value per header column"
         );
+    }
+
+    fn state(app: &App) -> &super::BoxscoreState {
+        app.boxscore.as_ref().unwrap()
+    }
+
+    #[test]
+    fn cancelled_dialog_returns_to_idle_without_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app(&dir.path().join("library.sqlite3"));
+        let id = basketball(&mut app);
+        send(&mut app, Message::ShowBoxscore(id));
+        assert_eq!(
+            state(&app).file_name,
+            "2026-10-24-home-vs-away-boxscore.pdf"
+        );
+        send(&mut app, Message::ExportBoxscore);
+        assert!(matches!(state(&app).export, ExportStatus::Saving));
+        send(&mut app, Message::BoxscoreTarget(None));
+        assert!(matches!(state(&app).export, ExportStatus::Idle));
+        assert!(app.error.is_none());
+        let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .is_some_and(|x| x == "pdf" || x == "tmp")
+            })
+            .collect();
+        assert!(leftovers.is_empty(), "cancel must write nothing");
+        render(&mut app);
+    }
+
+    #[test]
+    fn chosen_target_writes_pdf_and_reports_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app(&dir.path().join("library.sqlite3"));
+        let id = basketball(&mut app);
+        send(&mut app, Message::ShowBoxscore(id));
+        let target = dir.path().join("out");
+        send(&mut app, Message::BoxscoreTarget(Some(target.clone())));
+        assert!(matches!(state(&app).export, ExportStatus::Saving));
+        // The returned Task is not polled in tests; drive the write the way the task would.
+        let bytes = super::render_sheet(state(&app)).unwrap();
+        let written = hustlx_oss::boxscore::export::write_atomic(&target, &bytes).unwrap();
+        send(&mut app, Message::BoxscoreWritten(Ok(written.clone())));
+        assert!(matches!(&state(&app).export, ExportStatus::Saved(p) if *p == written));
+        assert_eq!(written, dir.path().join("out.pdf"));
+        assert!(std::fs::read(&written).unwrap().starts_with(b"%PDF-"));
+        assert_eq!(super::export_label(&state(&app).export), "Export PDF");
+        render(&mut app);
+    }
+
+    #[test]
+    fn failed_write_shows_retry_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app(&dir.path().join("library.sqlite3"));
+        let id = basketball(&mut app);
+        send(&mut app, Message::ShowBoxscore(id));
+        send(
+            &mut app,
+            Message::BoxscoreWritten(Err("Could not save the PDF: denied".into())),
+        );
+        assert!(matches!(&state(&app).export, ExportStatus::Failed(m) if m.contains("denied")));
+        assert_eq!(super::export_label(&state(&app).export), "Retry export");
+        assert_eq!(super::export_label(&ExportStatus::Saving), "Saving…");
+        render(&mut app);
     }
 }
