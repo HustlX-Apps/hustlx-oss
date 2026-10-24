@@ -12,6 +12,8 @@ use iced::widget::{
 };
 use iced::{Border, Color, Element, Fill, Length, Theme, alignment};
 use std::{collections::BTreeMap, time::Instant};
+#[path = "boxscore_ui.rs"]
+mod boxscores;
 #[path = "clock_ui.rs"]
 mod clocks;
 #[cfg(test)]
@@ -34,6 +36,7 @@ pub enum Screen {
     Teams,
     Players,
     GameDay,
+    BoxScore,
 }
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -93,6 +96,7 @@ pub enum Message {
     RetryStorage,
     RetrySave,
     OpenMatch(i64),
+    ShowBoxscore(i64),
     CreateMatch,
     ClearMatchRoster(Side),
     MatchName(String),
@@ -160,6 +164,7 @@ pub struct App {
     lineup_draft: Option<hustlx_oss::lineup::LineupDraft>,
     lineup_history: bool,
     lineup_saving: bool,
+    boxscore: Option<boxscores::BoxscoreState>,
 }
 impl Default for App {
     fn default() -> Self {
@@ -212,6 +217,7 @@ impl App {
             lineup_draft: None,
             lineup_history: false,
             lineup_saving: false,
+            boxscore: None,
         }
     }
     fn update_core(&mut self, message: Message) {
@@ -242,6 +248,7 @@ impl App {
             | Message::ClearLineup
             | Message::SaveLineup
             | Message::ShowLineupHistory) => self.update_lineups(message),
+            message @ Message::ShowBoxscore(..) => self.update_boxscore(message).map(drop),
             Message::Select(side, id) => {
                 if let Some(s) = &mut self.session {
                     s.select(side, id);
@@ -370,6 +377,8 @@ impl App {
             card(column![text("Your library could not be opened").size(24).font(HEADING),
                 text("Your existing data has not been replaced. Check the data folder, then retry.").size(14).color(c.muted),
                 button("Retry opening library").on_press(Message::RetryStorage)].spacing(18),c).width(Fill).height(Fill).into()
+        } else if self.screen == Screen::BoxScore && self.boxscore.is_some() {
+            self.boxscore_view(c)
         } else if self.screen == Screen::GameDay && self.active().is_some() {
             if self.is_sport_match() {
                 self.sport_view(c)
@@ -450,6 +459,7 @@ impl App {
                     button(text("Lineup history").size(11))
                         .on_press(Message::ShowLineupHistory)
                         .style(brand::secondary),
+                    self.boxscore_button(text("Box score").size(11), saved.summary.id, c),
                     badge("LOCAL MATCH", c.green, c)
                 ],
                 row![

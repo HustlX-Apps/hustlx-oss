@@ -40,7 +40,7 @@ impl App {
         self.session = Some(Session::new(store));
         self.refresh()
     }
-    fn store(&self) -> Result<&Store> {
+    pub(super) fn store(&self) -> Result<&Store> {
         self.session
             .as_ref()
             .map(Session::store)
@@ -87,20 +87,25 @@ impl App {
         self.roster = roster;
         Ok(())
     }
+    pub(super) fn navigate(&mut self, screen: Screen) -> Result<()> {
+        if screen != Screen::GameDay && !self.pending() {
+            self.session_mut()?.pause_for_close_at(Instant::now())?;
+        }
+        if screen != Screen::BoxScore {
+            self.boxscore = None;
+        }
+        self.lineup_draft = None;
+        self.lineup_history = false;
+        self.hotkeys.clear();
+        self.clock_edit = false;
+        self.show_hotkeys = false;
+        self.refresh()?;
+        self.screen = screen;
+        Ok(())
+    }
     pub(super) fn update_library(&mut self, message: Message) -> Result<()> {
         match message {
-            Message::Navigate(screen) => {
-                if screen != Screen::GameDay && !self.pending() {
-                    self.session_mut()?.pause_for_close_at(Instant::now())?;
-                }
-                self.lineup_draft = None;
-                self.lineup_history = false;
-                self.hotkeys.clear();
-                self.clock_edit = false;
-                self.show_hotkeys = false;
-                self.refresh()?;
-                self.screen = screen;
-            }
+            Message::Navigate(screen) => self.navigate(screen)?,
             Message::Refresh => self.refresh()?,
             Message::RetryStorage => self.connect()?,
             Message::OpenMatch(id) => {
@@ -620,6 +625,7 @@ impl App {
                     ]
                     .spacing(7)
                     .width(Fill),
+                    self.boxscore_button(text("Box score"), m.id, c),
                     button("Open match")
                         .on_press(Message::OpenMatch(m.id))
                         .padding([10, 14]),
