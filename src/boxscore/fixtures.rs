@@ -92,17 +92,11 @@ fn starters(side: Side, base: i64) -> LineupChange {
     }
 }
 
-fn sub(side: Side, base: i64, out: i64, incoming: i64, period: u32) -> LineupChange {
-    let before: Vec<i64> = (1..=5).map(|n| base + n).collect();
+/// One swap: `before` is the current court and `court` replaces `out` with `incoming`.
+fn sub(side: Side, before: Vec<i64>, out: i64, incoming: i64, period: u32) -> LineupChange {
     let court = before
         .iter()
-        .map(|id| {
-            if *id == base + out {
-                base + incoming
-            } else {
-                *id
-            }
-        })
+        .map(|id| if *id == out { incoming } else { *id })
         .collect();
     LineupChange {
         side,
@@ -168,9 +162,23 @@ pub fn basketball_full() -> SavedMatch {
         starters(Side::Home, HOME_BASE),
         starters(Side::Away, AWAY_BASE),
     ];
+    // Each substitution starts from the court the previous one left.
+    let mut courts = [lineups[0].court.clone(), lineups[1].court.clone()];
     for (i, (out, incoming)) in [(5, 6), (4, 7), (3, 8)].into_iter().enumerate() {
-        lineups.push(sub(Side::Home, HOME_BASE, out, incoming, i as u32 + 1));
-        lineups.push(sub(Side::Away, AWAY_BASE, out, incoming, i as u32 + 1));
+        for (court, (side, base)) in courts
+            .iter_mut()
+            .zip([(Side::Home, HOME_BASE), (Side::Away, AWAY_BASE)])
+        {
+            let change = sub(
+                side,
+                court.clone(),
+                base + out,
+                base + incoming,
+                i as u32 + 1,
+            );
+            *court = change.court.clone();
+            lineups.push(change);
+        }
     }
     basketball(Spec {
         name: "Finals Game 1",

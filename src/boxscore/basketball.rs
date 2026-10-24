@@ -2,6 +2,7 @@
 use super::{
     Align, Block, Column, DESCRIPTOR, Footer, Header, Identity, LineRow, LineScore, Organizer, Row,
     Sheet, TeamBlock,
+    minutes::{self, ParticipationTable},
     periods::{self, PeriodScores},
 };
 use crate::{
@@ -10,9 +11,6 @@ use crate::{
     lineup::LineupKind,
     storage::SavedMatch,
 };
-
-// replaced in Task 3
-pub struct Participation;
 
 const fn col(key: &'static str, label: &'static str, align: Align, weight: u8) -> Column {
     Column {
@@ -47,6 +45,56 @@ pub const COLUMNS: [Column; 22] = [
     col("pm", "+/-", Align::Right, 4),
     col("eff", "EFF", Align::Right, 4),
 ];
+
+const LEGEND_PARTS: [&str; 13] = [
+    "No = jersey",
+    "* = starter",
+    "MIN = minutes",
+    "M-A = made-attempted",
+    "% = shooting percentage",
+    "OR/DR/TOT = offensive/defensive/total rebounds",
+    "AS = assists",
+    "TO = turnovers",
+    "ST = steals",
+    "BS = blocks",
+    "PF = personal fouls",
+    "+/- = plus-minus",
+    "EFF = efficiency",
+];
+
+/// Column legend; minutes and plus-minus appear only when participation is known.
+pub fn legend(with_participation: bool) -> String {
+    LEGEND_PARTS
+        .iter()
+        .filter(|part| {
+            with_participation || !(part.starts_with("MIN ") || part.starts_with("+/- "))
+        })
+        .copied()
+        .collect::<Vec<_>>()
+        .join(" \u{b7} ")
+}
+
+fn signed(n: i64) -> String {
+    if n > 0 {
+        format!("+{n}")
+    } else {
+        n.to_string()
+    }
+}
+
+/// Picks the cells for `columns` by key; keys without a value get an empty cell.
+fn cells_for(columns: &[Column], values: &[(&'static str, String)]) -> Vec<String> {
+    columns
+        .iter()
+        .map(|c| {
+            values
+                .iter()
+                .find(|(k, _)| *k == c.key)
+                .map(|(_, v)| v.clone())
+                .unwrap_or_default()
+        })
+        .collect()
+}
 
 pub fn period_label(period: u32) -> String {
     if period <= 4 {
@@ -124,7 +172,7 @@ fn add(total: &mut Stats, s: &Stats) {
     total.fouls += s.fouls;
 }
 
-/// Stat cells in `COLUMNS` order from `pts` to `eff`, excluding `min` and `pm`.
+/// Stat cells keyed by column, from `pts` to `eff`, excluding `min` and `pm`.
 fn stat_cells(s: &Stats) -> Vec<(&'static str, String)> {
     let p2_made = s.field_goals_made - s.threes_made;
     let p2_att = s.field_goals_attempted - s.threes_attempted;
@@ -157,9 +205,9 @@ fn stat_cells(s: &Stats) -> Vec<(&'static str, String)> {
 pub fn team_block(
     saved: &SavedMatch,
     side: Side,
-    participation: Option<&Participation>,
+    participation: Option<&ParticipationTable>,
 ) -> TeamBlock {
-    // Participation columns (min, pm) arrive with Task 3; absent means omitted.
+    // Without participation the min and pm columns are omitted.
     let keep = |key: &str| participation.is_some() || (key != "min" && key != "pm");
     let columns: Vec<Column> = COLUMNS.iter().copied().filter(|c| keep(c.key)).collect();
     let game = &saved.game;
@@ -167,6 +215,7 @@ pub fn team_block(
     let starters = starters_for(saved, side);
 
     let mut total = Stats::default();
+    let mut total_seconds = 0u64;
     let mut rows = Vec::new();
     let mut notes = Vec::new();
     for id in row_order(&team.players, &starters) {
@@ -176,10 +225,19 @@ pub fn team_block(
         let s = game.player_stats(side, id);
         add(&mut total, &s);
         let mark = if starters.contains(&id) { "*" } else { "" };
-        let mut cells = vec![format!("{}{mark}", p.jersey), p.name.clone()];
-        cells.extend(stat_cells(&s).into_iter().map(|(_, v)| v));
+        let mut values = vec![
+            ("no", format!("{}{mark}", p.jersey)),
+            ("player", p.name.clone()),
+        ];
+        if let Some(table) = participation {
+            let part = table.get(side, id);
+            total_seconds += part.seconds;
+            values.push(("min", minutes::format_minutes(part.seconds)));
+            values.push(("pm", signed(part.plus_minus)));
+        }
+        values.extend(stat_cells(&s));
         rows.push(Row {
-            cells,
+            cells: cells_for(&columns, &values),
             emphasis: false,
         });
         let mut flags = Vec::new();
@@ -196,8 +254,13 @@ pub fn team_block(
             notes.push(format!("{} {}: {}", p.jersey, p.name, flags.join(" ")));
         }
     }
-    let mut totals = vec![String::new(), "Totals".to_string()];
-    totals.extend(stat_cells(&total).into_iter().map(|(_, v)| v));
+    // Team plus-minus is left blank; only the minutes total is shown.
+    let mut totals = vec![("player", "Totals".to_string())];
+    if participation.is_some() {
+        totals.push(("min", minutes::format_minutes(total_seconds)));
+    }
+    totals.extend(stat_cells(&total));
+    let totals = cells_for(&columns, &totals);
     TeamBlock {
         name: team.name.clone(),
         side_letter: if side == Side::Home { 'A' } else { 'B' },
@@ -260,9 +323,10 @@ pub fn sheet(
     let summary = &saved.summary;
     let plays = saved.game.plays();
     let scores = periods::period_scores(plays);
+    let participation = minutes::participation(saved);
     let mut teams = [
-        team_block(saved, Side::Home, None),
-        team_block(saved, Side::Away, None),
+        team_block(saved, Side::Home, participation.as_ref()),
+        team_block(saved, Side::Away, participation.as_ref()),
     ];
     if let Some(scores) = &scores {
         for (team, side) in teams.iter_mut().zip([Side::Home, Side::Away]) {
@@ -291,8 +355,12 @@ pub fn sheet(
         },
         line_score: scores.as_ref().map(|p| line_score(saved, p)),
         teams,
-        extra: periods::game_flow(plays).map(|f| game_flow_block(&f)),
-        legend: None,
+        // Game flow is hidden whenever the line score is hidden.
+        extra: scores
+            .as_ref()
+            .and(periods::game_flow(plays))
+            .map(|f| game_flow_block(&f)),
+        legend: Some(legend(participation.is_some())),
         footer: Footer {
             center: "powered by HustlX".to_string(),
             right: format!("Generated {generated_on} by HustlX OSS {version}"),
@@ -346,9 +414,15 @@ mod tests {
         assert_eq!(COLUMNS.len(), 22);
         let sheet = ready(&fixtures::basketball_full());
         for block in &sheet.teams {
-            // min and pm are omitted until participation lands (Task 3).
-            assert_eq!(block.columns.len(), 20);
+            assert_eq!(block.columns.len(), 22);
             assert_eq!(block.rows.len(), 12);
+            assert!(block.rows.iter().all(|r| r.cells.len() == 22));
+            assert_eq!(block.totals.cells.len(), 22);
+        }
+        // Without participation min and pm are omitted.
+        let plain = ready(&fixtures::basketball_unstamped());
+        for block in &plain.teams {
+            assert_eq!(block.columns.len(), 20);
             assert!(block.rows.iter().all(|r| r.cells.len() == 20));
             assert_eq!(block.totals.cells.len(), 20);
         }
