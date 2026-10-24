@@ -1,6 +1,8 @@
 //! Basketball box score: player rows, totals and the sheet around them.
 use super::{
-    Align, Column, DESCRIPTOR, Footer, Header, Identity, Organizer, Row, Sheet, TeamBlock,
+    Align, Block, Column, DESCRIPTOR, Footer, Header, Identity, LineRow, LineScore, Organizer, Row,
+    Sheet, TeamBlock,
+    periods::{self, PeriodScores},
 };
 use crate::{
     Player, Side, Stats,
@@ -213,6 +215,42 @@ pub fn team_block(
     }
 }
 
+fn line_score(saved: &SavedMatch, scores: &PeriodScores) -> LineScore {
+    let row = |side: Side, name: &str, cells: &[u32]| LineRow {
+        name: name.to_string(),
+        cells: cells.iter().map(u32::to_string).collect(),
+        total: saved.game.score(side).to_string(),
+    };
+    let mut columns = scores.labels.clone();
+    columns.push("T".to_string());
+    LineScore {
+        title: "Scoring by period".to_string(),
+        columns,
+        rows: [
+            row(Side::Home, &saved.summary.home_name, &scores.home),
+            row(Side::Away, &saved.summary.away_name, &scores.away),
+        ],
+    }
+}
+
+fn game_flow_block(flow: &periods::GameFlow) -> Block {
+    Block {
+        title: "Game flow".to_string(),
+        lines: vec![
+            format!(
+                "Biggest lead: A {} \u{b7} B {}",
+                flow.biggest_lead[0], flow.biggest_lead[1]
+            ),
+            format!(
+                "Biggest run: A {} \u{b7} B {}",
+                flow.biggest_run[0], flow.biggest_run[1]
+            ),
+            format!("Lead changes: {}", flow.lead_changes),
+            format!("Times tied: {}", flow.times_tied),
+        ],
+    }
+}
+
 pub fn sheet(
     saved: &SavedMatch,
     organizer: Option<&Organizer>,
@@ -220,6 +258,20 @@ pub fn sheet(
     version: &str,
 ) -> Sheet {
     let summary = &saved.summary;
+    let plays = saved.game.plays();
+    let scores = periods::period_scores(plays);
+    let mut teams = [
+        team_block(saved, Side::Home, None),
+        team_block(saved, Side::Away, None),
+    ];
+    if let Some(scores) = &scores {
+        for (team, side) in teams.iter_mut().zip([Side::Home, Side::Away]) {
+            let fouls = periods::team_fouls_by_period(plays, side, scores.labels.len());
+            let joined: Vec<String> = fouls.iter().map(u32::to_string).collect();
+            team.notes
+                .push(format!("Team fouls by period: {}", joined.join(" \u{b7} ")));
+        }
+    }
     Sheet {
         identity: Identity {
             organizer_name: organizer.map(|o| o.name.clone()),
@@ -237,12 +289,9 @@ pub fn sheet(
             away_score: saved.game.score(Side::Away).to_string(),
             status: status_line(&saved.clock),
         },
-        line_score: None,
-        teams: [
-            team_block(saved, Side::Home, None),
-            team_block(saved, Side::Away, None),
-        ],
-        extra: None,
+        line_score: scores.as_ref().map(|p| line_score(saved, p)),
+        teams,
+        extra: periods::game_flow(plays).map(|f| game_flow_block(&f)),
         legend: None,
         footer: Footer {
             center: "powered by HustlX".to_string(),
@@ -400,10 +449,11 @@ mod tests {
     #[test]
     fn fouls_note_lists_technical_and_unsportsmanlike() {
         let sheet = ready(&fixtures::basketball_full());
-        assert_eq!(sheet.teams[0].notes.len(), 1);
+        assert_eq!(sheet.teams[0].notes.len(), 2);
         assert!(sheet.teams[0].notes[0].contains("T1"));
         assert!(sheet.teams[0].notes[0].contains("U1"));
-        assert!(sheet.teams[1].notes.is_empty());
+        assert_eq!(sheet.teams[1].notes.len(), 1);
+        assert!(sheet.teams[1].notes[0].starts_with("Team fouls by period"));
         let plain = ready(&fixtures::basketball_unstamped());
         assert!(plain.teams.iter().all(|t| t.notes.is_empty()));
     }

@@ -3,6 +3,7 @@ use crate::{sport::Sport, storage::SavedMatch};
 
 pub mod basketball;
 pub mod fixtures;
+pub mod periods;
 
 pub const DESCRIPTOR: &str = "Reference-grade box score";
 
