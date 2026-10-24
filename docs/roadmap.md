@@ -43,6 +43,7 @@ Each slice should produce a reviewable change, matching documentation, and evide
 ## Results and release
 
 - [x] View the saved basketball box score locally and export it as a one-page PDF.
+- [x] Export basketball player stats and play-by-play as CSV from the Box score screen.
 - [ ] Export the box score PDF for the other eight sports.
 - [ ] Export statistics and portable backups and test restore behavior.
 - [ ] Verify the complete journey without network access on Windows and macOS.
