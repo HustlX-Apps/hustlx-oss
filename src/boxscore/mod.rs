@@ -5,6 +5,7 @@ pub mod basketball;
 pub mod fixtures;
 pub mod layout;
 pub mod minutes;
+pub mod pdf;
 pub mod periods;
 
 pub const DESCRIPTOR: &str = "Reference-grade box score";

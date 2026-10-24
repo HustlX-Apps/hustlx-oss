@@ -156,6 +156,8 @@ pub enum Item {
 
 #[derive(Debug, Clone)]
 pub struct Layout {
+    /// PDF document title, `"<home> vs <away> box score"`.
+    pub title: String,
     pub items: Vec<Item>,
     pub step: u8,
     pub body_size: f32,
@@ -215,6 +217,10 @@ pub fn layout(sheet: &Sheet, metrics: &Metrics) -> Result<Layout, DoesNotFit> {
         if page.y >= FOOTER_TOP {
             page.footer(&reduced);
             return Ok(Layout {
+                title: format!(
+                    "{} vs {} box score",
+                    sheet.header.home_name, sheet.header.away_name
+                ),
                 items: page.items,
                 step: index as u8,
                 body_size: rung.body,
