@@ -52,7 +52,7 @@ Undo appends a correction and retains the original event. It restores player cou
 
 Basketball retains its existing v2 statistics, lineup and clock workflow. Basketball-only hotkeys and shot-clock controls do not appear in another sport.
 
-Full official statistical reports, exports/backups, remote sync, staff-card attribution, field reduction timers, detailed event editing, tournament/league management and Swimming/Taekwondo desks are outside this port. Advanced hosted workflows are not implied by a matching native layout. Rules are configurable local policies, not federation certification. Missing external rule provenance never prevents local play.
+The one-page box score PDF covers basketball only in this slice; the other sports show that it is not available yet and follow in later slices (see [printable box score](printable-boxscore.md)). Full official statistical reports, other exports/backups, remote sync, staff-card attribution, field reduction timers, detailed event editing, tournament/league management and Swimming/Taekwondo desks are outside this port. Advanced hosted workflows are not implied by a matching native layout. Rules are configurable local policies, not federation certification. Missing external rule provenance never prevents local play.
 
 Tennis and Padel result-ready/completed scoreboards show the last completed set's game score with LAST SET GAMES. Deciding match tiebreaks show MATCH TIEBREAK POINTS instead. Live point labels remain 0/15/30/40/AD. Escape dismisses lineup/exchange drafts, the Volleyball outcome chooser and result review without saving; Enter submits field-clock corrections. See [native keyboard/UI evidence](evidence/native-sport-e2e/README.md).
 

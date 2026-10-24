@@ -2,7 +2,7 @@
 
 Offline-first Game Day for Windows and macOS, built with Rust, Iced and SQLite. Run Volleyball, Pickleball, Table Tennis, Tennis (Long Tennis), Badminton, Padel, Football and Futsal matches locally alongside the existing basketball console.
 
-**Status:** native Rust application in development, licensed under MIT. The Iced interface now supports a SQLite team/player library, roster editing, match creation and reopening, durable stat entry/undo, game/shot clocks, jersey/position profiles, supported web v2 hotkeys, starting lineups and confirmed substitutions. The sport consoles use native participant panels, score/unit or clock strips, action pads and saved history. Optional roster snapshots support player attribution, lineups and exchanges. Volleyball includes a six-position court, rotation and libero exchanges; Football and Futsal include their own clocks, events, shootouts and draw-aware completion. Cloud sync, full statistical reports, exports and installers remain planned.
+**Status:** native Rust application in development, licensed under MIT. The Iced interface now supports a SQLite team/player library, roster editing, match creation and reopening, durable stat entry/undo, game/shot clocks, jersey/position profiles, supported web v2 hotkeys, starting lineups and confirmed substitutions. The sport consoles use native participant panels, score/unit or clock strips, action pads and saved history. Optional roster snapshots support player attribution, lineups and exchanges. Volleyball includes a six-position court, rotation and libero exchanges; Football and Futsal include their own clocks, events, shootouts and draw-aware completion. Basketball matches print to a one-page box score PDF from inside the app. Cloud sync, statistical reports for the other sports, other exports and installers remain planned.
 
 The interface uses the official HustlX wordmarks, Inter body text, Exo headings and Exo Black scores, bundled for offline use. See [branding](docs/branding.md).
 
@@ -40,6 +40,10 @@ New stat events also retain their period and game/shot readings before clock eff
 
 [Match library](docs/evidence/hustlx-branding/matches-dark.jpg), [light theme](docs/evidence/hustlx-branding/game-day-light.jpg), and [current visual evidence](docs/evidence/hustlx-branding/README.md). [SQLite verification](docs/evidence/sqlite-library/README.md) records the original create/restart journey. See [local storage](docs/storage.md) for data locations and save/retry behavior.
 
+## Print a box score
+
+Open **Matches** and press **Box score** on a saved basketball match, or press it on the Game Day scoreboard. The screen shows the sheet and **Export PDF** opens the system save dialog; the one-page A4 PDF carries scoring by period, the full stat table with minutes and plus-minus when lineups were saved, and the game flow. See [printable box score](docs/printable-boxscore.md).
+
 ## Web UI reference
 
 This is the existing web console rendered with sample data, not the desktop application:
@@ -60,6 +64,7 @@ CI/CD is paused to save cost. GitHub Actions is disabled; all checks run locally
 - [Product brief](docs/product-brief.md): confirmed scope and open decisions.
 - [Architecture](docs/architecture-proposal.md): implemented Rust/SQLite/clock boundaries and proposed sync.
 - [Lineups and substitutions](docs/lineups-substitutions.md): starting players, swaps, history and save behavior.
+- [Printable box score](docs/printable-boxscore.md): the one-page basketball PDF, what prints, and the export flow.
 - [Local storage](docs/storage.md): schema, data paths, snapshots, and failure handling.
 - [Versions and local packages](docs/releases.md): local version preparation, Windows/macOS packaging and signing limits.
 - [Roadmap](docs/roadmap.md): implementation slices and acceptance evidence.

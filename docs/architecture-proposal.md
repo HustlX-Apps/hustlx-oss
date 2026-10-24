@@ -28,18 +28,18 @@ The database uses foreign keys, WAL, and synchronous FULL. First open creates sc
 
 ## Future boundaries
 
-- **Results/export:** consistent box scores, filesystem destination selection, portable backups, and tested restores.
+- **Results/export:** `src/boxscore` builds a sport-agnostic sheet from a saved match, fits it to one A4 page with the bundled font metrics and renders it with `printpdf`; the desktop screen saves it through an `rfd` dialog with an atomic write and opens it with `open`. Portable backups and tested restores remain proposed.
 - **Sync adapter:** optional remote mapping and commands. No network call belongs in the local commit path, and local identity must survive linking. No hosted contract is assumed or implemented.
 
 ## Clock and recovery
 
 `src/clock.rs` derives elapsed milliseconds from monotonic `Instant` anchors. UI ticks redraw at 100 ms; they do not subtract fixed increments. `src/session.rs` routes clocks and stats through the same expected revision and commit lane. Stat side effects and clock snapshots commit atomically. Every command and five-second running checkpoint stores the baseline. Graceful close pauses before closing; AppKit Quit is cancelled and forwarded to this same path through `src/native_quit.rs`. That bridge adds the public optional applicationShouldTerminate delegate method, and refuses to overwrite a future toolkit handler. Failure leaves the window open for retry. Abrupt recovery reopens the last checkpoint paused. Gaps over two seconds or wall/monotonic divergence freeze at the last observed state with a notice. See [clock policy](clocks-hotkeys.md) for supported controls and limits.
 
-For stat entry, the pending command holds the pre-action clock projection. Storage appends that immutable snapshot to the event and applies stat clock effects to the current baseline in the same transaction. `Play::clock` is optional because legacy and clock-free synthetic events have no trustworthy timing. Play-by-play shows the saved period/game/shot context while retaining append order. No quarter totals, minutes or plus-minus are derived yet.
+For stat entry, the pending command holds the pre-action clock projection. Storage appends that immutable snapshot to the event and applies stat clock effects to the current baseline in the same transaction. `Play::clock` is optional because legacy and clock-free synthetic events have no trustworthy timing. Play-by-play shows the saved period/game/shot context while retaining append order. The box score derives quarter totals, minutes and plus-minus from these stamps and the saved lineup changes, and omits them when a stamp is missing.
 
 ## Failures and exports
 
-Failed stat/undo saves remain visibly pending with an explicit retry. Pending commands are currently memory-only and do not survive an abrupt exit before they commit. Reopening a match explicitly discards its pending command and reloads committed truth. Export a consistent snapshot, let the operator select the destination, and surface filesystem failures. Backups must include schema version and sufficient match history to restore the record.
+Failed stat/undo saves remain visibly pending with an explicit retry. Pending commands are currently memory-only and do not survive an abrupt exit before they commit. Reopening a match explicitly discards its pending command and reloads committed truth. The box score export lets the operator select the destination, writes a temporary file and renames it over the target, and shows filesystem failures inline with a retry. Backups must include schema version and sufficient match history to restore the record.
 
 ## Verification boundaries
 
