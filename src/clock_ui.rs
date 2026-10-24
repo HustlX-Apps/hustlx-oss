@@ -72,7 +72,7 @@ impl App {
         if matches!(
             message,
             Message::ShowBoxscore(..)
-                | Message::ExportBoxscore
+                | Message::ExportBoxscore(..)
                 | Message::BoxscoreTarget(..)
                 | Message::BoxscoreWritten(..)
                 | Message::OpenBoxscoreFile

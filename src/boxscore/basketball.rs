@@ -146,7 +146,7 @@ pub fn row_order(players: &[Player], starters: &[i64]) -> Vec<i64> {
     sorted.into_iter().map(|p| p.id).collect()
 }
 
-fn starters_for(saved: &SavedMatch, side: Side) -> Vec<i64> {
+pub(crate) fn starters_for(saved: &SavedMatch, side: Side) -> Vec<i64> {
     saved
         .lineups
         .iter()
@@ -155,7 +155,7 @@ fn starters_for(saved: &SavedMatch, side: Side) -> Vec<i64> {
         .unwrap_or_default()
 }
 
-fn add(total: &mut Stats, s: &Stats) {
+pub(crate) fn add(total: &mut Stats, s: &Stats) {
     total.points += s.points;
     total.free_throws_made += s.free_throws_made;
     total.free_throws_attempted += s.free_throws_attempted;

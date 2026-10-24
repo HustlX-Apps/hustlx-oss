@@ -2,7 +2,7 @@
 use super::*;
 use crate::brand::BODY;
 use hustlx_oss::boxscore::{
-    Align, Block, Column as SheetColumn, LineScore, Row, Sheet, SheetResult, build, export,
+    Align, Block, Column as SheetColumn, LineScore, Row, Sheet, SheetResult, build, csv, export,
     layout::{Metrics, layout},
     pdf::render,
 };
@@ -15,8 +15,28 @@ use std::path::PathBuf;
 pub struct BoxscoreState {
     /// Suggested PDF name, fixed when the match is loaded so the dialog needs no storage read.
     pub file_name: String,
+    pub csv_file_name: String,
     pub sheet: SheetResult,
+    /// Stats CSV text, built with the sheet; `None` when the sport has no box score yet.
+    pub csv: Option<String>,
+    /// Format of the current or last export, which `export` describes.
+    pub format: ExportFormat,
     pub export: ExportStatus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportFormat {
+    Pdf,
+    Csv,
+}
+
+impl ExportFormat {
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Pdf => "pdf",
+            Self::Csv => "csv",
+        }
+    }
 }
 
 pub enum ExportStatus {
@@ -26,12 +46,35 @@ pub enum ExportStatus {
     Failed(String),
 }
 
-/// Export button caption for each export state.
-pub(super) fn export_label(status: &ExportStatus) -> &'static str {
+/// Caption of the `button` export; only the button of the active format shows its state.
+pub(super) fn export_label(
+    active: ExportFormat,
+    status: &ExportStatus,
+    button: ExportFormat,
+) -> &'static str {
+    let idle = match button {
+        ExportFormat::Pdf => "Export PDF",
+        ExportFormat::Csv => "Export CSV",
+    };
+    if active != button {
+        return idle;
+    }
     match status {
         ExportStatus::Failed(_) => "Retry export",
         ExportStatus::Saving => "Saving…",
-        ExportStatus::Idle | ExportStatus::Saved(_) => "Export PDF",
+        ExportStatus::Idle | ExportStatus::Saved(_) => idle,
+    }
+}
+
+/// Bytes to write for the active format; the message is what the screen shows when it cannot.
+pub(super) fn export_bytes(state: &BoxscoreState) -> std::result::Result<Vec<u8>, String> {
+    match state.format {
+        ExportFormat::Pdf => render_sheet(state),
+        ExportFormat::Csv => state
+            .csv
+            .as_ref()
+            .map(|text| text.as_bytes().to_vec())
+            .ok_or_else(|| "Stats CSV is not available for this sport yet.".to_owned()),
     }
 }
 
@@ -48,18 +91,26 @@ pub(super) fn render_sheet(state: &BoxscoreState) -> std::result::Result<Vec<u8>
 }
 
 /// Native save dialog on the Iced executor; `None` means the operator cancelled.
-pub(super) fn export_task(default_name: String) -> Task<Message> {
+pub(super) fn export_task(default_name: String, format: ExportFormat) -> Task<Message> {
+    let (filter, ext) = match format {
+        ExportFormat::Pdf => ("PDF", "pdf"),
+        ExportFormat::Csv => ("CSV", "csv"),
+    };
     Task::perform(
         rfd::AsyncFileDialog::new()
             .set_file_name(default_name)
-            .add_filter("PDF", &["pdf"])
+            .add_filter(filter, &[ext])
             .save_file(),
         |handle| Message::BoxscoreTarget(handle.map(|h| h.path().to_path_buf())),
     )
 }
 
-fn save_error(error: &std::io::Error) -> String {
-    format!("Could not save the PDF: {error}. Check the folder, then try again.")
+fn save_error(format: ExportFormat, error: &std::io::Error) -> String {
+    let what = match format {
+        ExportFormat::Pdf => "PDF",
+        ExportFormat::Csv => "CSV",
+    };
+    format!("Could not save the {what}: {error}. Check the folder, then try again.")
 }
 
 const CHARS_PER_WEIGHT: usize = 7;
@@ -95,19 +146,36 @@ impl App {
                 let saved = self.store()?.load_match(id)?;
                 let generated_on = chrono::Local::now().format("%Y-%m-%d").to_string();
                 let sheet = build(&saved, None, &generated_on, env!("CARGO_PKG_VERSION"));
+                let csv = matches!(sheet, SheetResult::Ready(_)).then(|| {
+                    csv::basketball(
+                        &saved,
+                        &chrono::Local::now()
+                            .format("%Y-%m-%dT%H:%M:%S%:z")
+                            .to_string(),
+                    )
+                });
                 self.boxscore = Some(BoxscoreState {
                     file_name: export::default_file_name(&saved.summary),
+                    csv_file_name: export::default_csv_file_name(&saved.summary),
                     sheet,
+                    csv,
+                    format: ExportFormat::Pdf,
                     export: ExportStatus::Idle,
                 });
                 self.navigate(Screen::BoxScore)?;
             }
-            Message::ExportBoxscore => {
+            Message::ExportBoxscore(format) => {
                 if let Some(state) = self.boxscore.as_mut()
                     && matches!(state.sheet, SheetResult::Ready(_))
+                    && !matches!(state.export, ExportStatus::Saving)
                 {
+                    let name = match format {
+                        ExportFormat::Pdf => state.file_name.clone(),
+                        ExportFormat::Csv => state.csv_file_name.clone(),
+                    };
+                    state.format = format;
                     state.export = ExportStatus::Saving;
-                    return Ok((self.pick_export_target)(state.file_name.clone()));
+                    return Ok((self.pick_export_target)(name, format));
                 }
             }
             Message::BoxscoreTarget(None) => {
@@ -117,13 +185,14 @@ impl App {
             }
             Message::BoxscoreTarget(Some(path)) => {
                 if let Some(state) = self.boxscore.as_mut() {
-                    match render_sheet(state) {
+                    match export_bytes(state) {
                         Ok(bytes) => {
+                            let format = state.format;
                             state.export = ExportStatus::Saving;
                             return Ok(Task::perform(
                                 async move {
-                                    export::write_atomic(&path, &bytes)
-                                        .map_err(|error| save_error(&error))
+                                    export::write_atomic_as(&path, format.extension(), &bytes)
+                                        .map_err(|error| save_error(format, &error))
                                 },
                                 Message::BoxscoreWritten,
                             ));
@@ -187,17 +256,22 @@ impl App {
     pub(super) fn boxscore_view(&self, c: Colors) -> Element<'_, Message> {
         let state = self.boxscore.as_ref();
         let status = state.map_or(&ExportStatus::Idle, |s| &s.export);
+        let active = state.map_or(ExportFormat::Pdf, |s| s.format);
         let can_export = state.is_some_and(|s| matches!(s.sheet, SheetResult::Ready(_)))
             && !matches!(status, ExportStatus::Saving);
+        let export_button = |format: ExportFormat| {
+            button(text(export_label(active, status, format)).size(12))
+                .on_press_maybe(can_export.then_some(Message::ExportBoxscore(format)))
+                .padding([8, 12])
+        };
         let bar = row![
             button(text("Back to Matches").size(12))
                 .on_press(Message::Navigate(Screen::Matches))
                 .padding([8, 12])
                 .style(brand::secondary),
             Space::new().width(Fill),
-            button(text(export_label(status)).size(12))
-                .on_press_maybe(can_export.then_some(Message::ExportBoxscore))
-                .padding([8, 12]),
+            export_button(ExportFormat::Csv).style(brand::secondary),
+            export_button(ExportFormat::Pdf),
         ]
         .spacing(10)
         .align_y(alignment::Vertical::Center);
@@ -351,7 +425,7 @@ fn sheet_view(sheet: &Sheet, c: Colors) -> Element<'_, Message> {
 #[cfg(test)]
 mod tests {
     use super::super::*;
-    use super::ExportStatus;
+    use super::{ExportFormat, ExportStatus};
     use hustlx_oss::boxscore::SheetResult;
     use hustlx_oss::sport::{Rules, Sport};
     use hustlx_oss::storage::{MatchDraft, SportMatchDraft};
@@ -362,7 +436,7 @@ mod tests {
         let mut app = App::empty();
         app.session = Some(Session::new(Store::open(path).unwrap()));
         // Never open a native dialog from a test thread.
-        app.pick_export_target = |_| Task::none();
+        app.pick_export_target = |_, _| Task::none();
         app
     }
 
@@ -442,6 +516,7 @@ mod tests {
             &app.boxscore.as_ref().unwrap().sheet,
             SheetResult::Unsupported { sport_label } if sport_label == "Volleyball"
         ));
+        assert!(app.boxscore.as_ref().unwrap().csv.is_none());
         render(&mut app);
     }
 
@@ -509,7 +584,7 @@ mod tests {
             state(&app).file_name,
             "2026-10-24-home-vs-away-boxscore.pdf"
         );
-        send(&mut app, Message::ExportBoxscore);
+        send(&mut app, Message::ExportBoxscore(ExportFormat::Pdf));
         assert!(matches!(state(&app).export, ExportStatus::Saving));
         send(&mut app, Message::BoxscoreTarget(None));
         assert!(matches!(state(&app).export, ExportStatus::Idle));
@@ -543,7 +618,43 @@ mod tests {
         assert!(matches!(&state(&app).export, ExportStatus::Saved(p) if *p == written));
         assert_eq!(written, dir.path().join("out.pdf"));
         assert!(std::fs::read(&written).unwrap().starts_with(b"%PDF-"));
-        assert_eq!(super::export_label(&state(&app).export), "Export PDF");
+        assert_eq!(
+            super::export_label(ExportFormat::Pdf, &state(&app).export, ExportFormat::Pdf),
+            "Export PDF"
+        );
+        render(&mut app);
+    }
+
+    #[test]
+    fn csv_export_uses_csv_name_and_writes_stats() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app(&dir.path().join("library.sqlite3"));
+        let id = basketball(&mut app);
+        send(&mut app, Message::ShowBoxscore(id));
+        assert_eq!(
+            state(&app).csv_file_name,
+            "2026-10-24-home-vs-away-stats.csv"
+        );
+        send(&mut app, Message::ExportBoxscore(ExportFormat::Csv));
+        assert_eq!(state(&app).format, ExportFormat::Csv);
+        assert!(matches!(state(&app).export, ExportStatus::Saving));
+        // A second export while one is saving is ignored.
+        send(&mut app, Message::ExportBoxscore(ExportFormat::Pdf));
+        assert_eq!(state(&app).format, ExportFormat::Csv);
+        let target = dir.path().join("stats");
+        send(&mut app, Message::BoxscoreTarget(Some(target.clone())));
+        let bytes = super::export_bytes(state(&app)).unwrap();
+        let written =
+            hustlx_oss::boxscore::export::write_atomic_as(&target, "csv", &bytes).unwrap();
+        send(&mut app, Message::BoxscoreWritten(Ok(written.clone())));
+        assert_eq!(written, dir.path().join("stats.csv"));
+        let text = std::fs::read_to_string(&written).unwrap();
+        assert!(text.starts_with("\u{feff}Section,Field,Value"));
+        assert!(text.contains("Summary,Match,Screen Box Score"));
+        assert_eq!(
+            super::export_label(ExportFormat::Csv, &state(&app).export, ExportFormat::Csv),
+            "Export CSV"
+        );
         render(&mut app);
     }
 
@@ -558,8 +669,18 @@ mod tests {
             Message::BoxscoreWritten(Err("Could not save the PDF: denied".into())),
         );
         assert!(matches!(&state(&app).export, ExportStatus::Failed(m) if m.contains("denied")));
-        assert_eq!(super::export_label(&state(&app).export), "Retry export");
-        assert_eq!(super::export_label(&ExportStatus::Saving), "Saving…");
+        let label =
+            |status: &ExportStatus, button| super::export_label(ExportFormat::Pdf, status, button);
+        assert_eq!(
+            label(&state(&app).export, ExportFormat::Pdf),
+            "Retry export"
+        );
+        assert_eq!(label(&ExportStatus::Saving, ExportFormat::Pdf), "Saving…");
+        // Only the active format's button reflects the export state.
+        assert_eq!(
+            label(&ExportStatus::Saving, ExportFormat::Csv),
+            "Export CSV"
+        );
         render(&mut app);
     }
 }
