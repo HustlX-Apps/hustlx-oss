@@ -161,6 +161,7 @@ pub struct Layout {
     pub body_size: f32,
 }
 
+/// Unreachable once step 7 caps rows, but kept so callers handle the `Result`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DoesNotFit {
     pub overflow_pt: f32,
@@ -198,8 +199,8 @@ const LADDER: [Step; 8] = [
     step(7.0, 5),
 ];
 
-/// Lays the sheet out on one A4 page, walking the fit ladder until the content fits above
-/// the footer and, before names are shortened, every player name fits its column.
+/// Lays the sheet out on one A4 page, walking the fit ladder until the content height fits
+/// above the footer zone. Cell text wider than its column is truncated at every step.
 pub fn layout(sheet: &Sheet, metrics: &Metrics) -> Result<Layout, DoesNotFit> {
     let mut overflow_pt = 0.0;
     for (index, rung) in LADDER.iter().enumerate() {
@@ -211,8 +212,7 @@ pub fn layout(sheet: &Sheet, metrics: &Metrics) -> Result<Layout, DoesNotFit> {
             y: TOP,
         };
         page.content(&reduced);
-        let names_fit = rung.short_names || page.names_fit(&reduced.teams);
-        if page.y >= FOOTER_TOP && names_fit {
+        if page.y >= FOOTER_TOP {
             page.footer(&reduced);
             return Ok(Layout {
                 items: page.items,
@@ -677,26 +677,6 @@ impl Page<'_> {
         }
     }
 
-    /// Whether every player row name fits its column without truncation.
-    fn names_fit(&self, teams: &[TeamBlock]) -> bool {
-        teams.iter().all(|team| {
-            let Some(p) = player_index(&team.columns) else {
-                return true;
-            };
-            let max = column_widths(&team.columns)[p] - 2.0 * PAD;
-            team.rows.iter().all(|row| {
-                let font = if row.emphasis {
-                    FontId::BodyBold
-                } else {
-                    FontId::Body
-                };
-                row.cells
-                    .get(p)
-                    .is_none_or(|name| self.m.width(font, self.body, name) <= max)
-            })
-        })
-    }
-
     fn footer(&mut self, sheet: &Sheet) {
         self.rule(MARGIN + 10.0, 0.5);
         let center = &sheet.footer.center;
@@ -767,23 +747,93 @@ mod tests {
         assert_eq!(l.body_size, 8.0);
     }
 
+    fn assert_inside_the_page(l: &Layout) {
+        let inside_x = |x: f32| (0.0..=PAGE_W).contains(&x);
+        let inside_y = |y: f32| (MARGIN..=PAGE_H - MARGIN).contains(&y);
+        for item in &l.items {
+            let ok = match item {
+                Item::Text { x, y, .. } => inside_x(*x) && inside_y(*y),
+                Item::Line { x1, y1, x2, y2, .. } => {
+                    inside_x(*x1) && inside_x(*x2) && inside_y(*y1) && inside_y(*y2)
+                }
+                Item::Rect { x, y, w, h, .. } | Item::Image { x, y, w, h, .. } => {
+                    inside_x(*x) && inside_x(x + w) && inside_y(*y) && inside_y(y + h)
+                }
+            };
+            assert!(ok, "outside the page: {item:?}");
+        }
+    }
+
     #[test]
     fn oversized_fixture_fits_within_the_ladder_and_truncates_names() {
         let m = Metrics::bundled();
-        let l = layout(&sheet(fixtures::basketball_oversized), &m).unwrap();
-        assert!(l.step >= 6);
+        let s = sheet(fixtures::basketball_oversized);
+        let l = layout(&s, &m).unwrap();
+        assert_eq!(l.step, 0);
         assert!(
-            l.items
-                .iter()
-                .any(|i| matches!(i, Item::Text { text, .. } if text.ends_with('…')))
+            texts(&l).any(|(t, ..)| t.starts_with("Home Player") && t.ends_with('…')),
+            "a long player name is truncated"
         );
-        // The 60 character team name is truncated: no text is wider than the usable width.
+        // Table cell text sits at its column anchor and never exceeds the column.
         let usable = PAGE_W - 2.0 * MARGIN;
-        for (text, _, size, font) in texts(&l) {
-            assert!(m.width(font, size, text) <= usable, "too wide: {text}");
+        let mut columns = Vec::new();
+        for team in &s.teams {
+            let mut x = MARGIN;
+            for (column, w) in team.columns.iter().zip(column_widths(&team.columns)) {
+                columns.push((anchor(x, w, column.align), column.align, w));
+                x += w;
+            }
         }
-        // The score strip has no room for it, so the header copy is shortened.
+        for item in &l.items {
+            let Item::Text {
+                x,
+                size,
+                font,
+                text,
+                align,
+                ..
+            } = item
+            else {
+                continue;
+            };
+            let width = m.width(*font, *size, text);
+            assert!(width <= usable, "too wide: {text}");
+            if *size == l.body_size {
+                for (ax, calign, w) in &columns {
+                    if (ax - x).abs() < 0.01 && calign == align {
+                        assert!(width <= w - 2.0 * PAD, "wider than its column: {text}");
+                    }
+                }
+            }
+        }
+        // The score strip has no room for the 60 character home name.
         assert!(texts(&l).any(|(t, ..)| t.starts_with("HHHH") && t.ends_with('…')));
+        assert_inside_the_page(&l);
+    }
+
+    #[test]
+    fn sixty_row_teams_walk_the_ladder_to_step_7_and_cap_rows() {
+        let m = Metrics::bundled();
+        let mut s = sheet(fixtures::basketball_full);
+        for team in &mut s.teams {
+            let base = team.rows.clone();
+            team.rows = base.iter().cycle().take(60).cloned().collect();
+        }
+        let l = layout(&s, &m).unwrap();
+        assert_eq!(l.step, 7);
+        assert!(texts(&l).any(|(t, ..)| t == "+42 not shown"));
+        // Everything but the footer (text at MARGIN, rule at MARGIN + 10) ends above its zone.
+        for item in &l.items {
+            let bottom = match item {
+                Item::Text { y, .. } if *y == MARGIN => continue,
+                Item::Line { y1, .. } if *y1 == MARGIN + 10.0 => continue,
+                Item::Text { y, .. } => *y,
+                Item::Line { y1, y2, .. } => y1.min(*y2),
+                Item::Rect { y, .. } | Item::Image { y, .. } => *y,
+            };
+            assert!(bottom >= MARGIN + 14.0, "inside the footer zone: {item:?}");
+        }
+        assert_inside_the_page(&l);
     }
 
     #[test]
