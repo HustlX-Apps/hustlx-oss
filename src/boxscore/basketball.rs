@@ -533,6 +533,28 @@ mod tests {
     }
 
     #[test]
+    fn percentage_columns_are_labelled_percent_with_keys_unchanged() {
+        let pct_keys: Vec<&str> = COLUMNS
+            .iter()
+            .filter(|c| c.label == "%")
+            .map(|c| c.key)
+            .collect();
+        assert_eq!(pct_keys, ["fg_pct", "p2_pct", "p3_pct", "ft_pct"]);
+        let sheet = ready(&fixtures::basketball_full());
+        for block in &sheet.teams {
+            for key in &pct_keys {
+                let c = block.columns.iter().find(|c| c.key == *key).unwrap();
+                assert_eq!(c.label, "%");
+            }
+        }
+        let legend = sheet.legend.unwrap();
+        assert!(legend.contains("% = shooting percentage"));
+        for old in ["FG%", "2P%", "3P%", "FT%"] {
+            assert!(!legend.contains(old), "{old}");
+        }
+    }
+
+    #[test]
     fn footer_is_powered_by_hustlx_only() {
         let sheet = ready(&fixtures::basketball_full());
         assert_eq!(sheet.footer.center, "powered by HustlX");
