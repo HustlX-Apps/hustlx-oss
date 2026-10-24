@@ -42,7 +42,8 @@ Each slice should produce a reviewable change, matching documentation, and evide
 
 ## Results and release
 
-- [ ] View saved box scores and play-by-play locally.
+- [x] View the saved basketball box score locally and export it as a one-page PDF.
+- [ ] Export the box score PDF for the other eight sports.
 - [ ] Export statistics and portable backups and test restore behavior.
 - [ ] Verify the complete journey without network access on Windows and macOS.
 - [x] Add version preparation and native local ZIP/checksum commands, without publishing.

@@ -1,5 +1,6 @@
 //! Renderer-independent basketball state. SQLite owns durable local matches.
 
+pub mod boxscore;
 pub mod clock;
 pub mod field_sport;
 pub mod hotkeys;
@@ -10,7 +11,7 @@ pub mod session;
 pub mod sport;
 pub mod storage;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Side {
     Home,

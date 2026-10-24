@@ -9,7 +9,7 @@ repository = "https://github.com/HustlX-Apps/hustlx-oss"
 
 [features]
 default = ["desktop"]
-desktop = ["dep:iced"]
+desktop = ["dep:iced", "dep:rfd", "dep:open"]
 
 [dependencies]
 chrono = "0.4"
@@ -19,6 +19,10 @@ directories = "6"
 iced = { version = "0.14", optional = true, default-features = false, features = ["wgpu", "tiny-skia", "crisp", "thread-pool", "svg", "tokio"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 uuid = { version = "1", features = ["v4"] }
+ttf-parser = "0.25"
+printpdf = { version = "0.8", default-features = false, features = ["png"] }
+rfd = { version = "0.15", optional = true }
+open = { version = "5", optional = true }
 
 [[bin]]
 name = "hustlx-oss"

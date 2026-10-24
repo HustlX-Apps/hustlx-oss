@@ -69,6 +69,29 @@ impl App {
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
         self.now = Instant::now();
+        if matches!(
+            message,
+            Message::ShowBoxscore(..)
+                | Message::ExportBoxscore
+                | Message::BoxscoreTarget(..)
+                | Message::BoxscoreWritten(..)
+                | Message::OpenBoxscoreFile
+                | Message::RevealBoxscoreFile
+        ) {
+            let task = match self.update_boxscore(message) {
+                Ok(task) => {
+                    if !self.pending() {
+                        self.error = None;
+                    }
+                    task
+                }
+                Err(error) => {
+                    self.error = Some(error.to_string());
+                    Task::none()
+                }
+            };
+            return Task::batch([task, self.finish_update()]);
+        }
         // A stale widget message or basketball shortcut must never act on another sport.
         if self.is_sport_match()
             && matches!(

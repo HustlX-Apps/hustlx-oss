@@ -24,4 +24,8 @@ All fonts are embedded in the executable for offline operation. Font licenses ap
 
 HustlX logos and wordmarks, including the files in `assets/brand/`, are excluded from the project's MIT license and remain reserved to their rights holders. The MIT license grants no rights to HustlX names or trademarks and does not imply endorsement. Obtain separate permission to reuse the artwork or replace it when distributing a fork.
 
+## Cargo dependencies added for the box score
+
+The printable box score adds four Cargo dependencies. `ttf-parser` (MIT OR Apache-2.0) measures text with the bundled fonts for the one-page layout. `printpdf` 0.8.2 (MIT, built without default features and with only the `png` feature) writes the PDF. `rfd` 0.15.4 (MIT) opens the native save dialog, and `open` 5.4.5 (MIT) opens the saved file or its folder in the system viewer; both are desktop-only optional dependencies. The exact versions of all four are recorded in `Cargo.lock`.
+
 Cargo dependencies retain their respective licenses. `Cargo.lock` records resolved versions; dependency notices need to be collected for packaged distribution. Project code and documentation, including the `xtask` packaging tool, use the [MIT License](LICENSE).

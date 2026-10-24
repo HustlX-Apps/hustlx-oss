@@ -24,3 +24,4 @@ dist/
 __pycache__/
 /artifacts/
 /release-assets/
+.worktrees/
