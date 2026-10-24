@@ -1,7 +1,9 @@
 //! Box score screen: the printable sheet of a saved match, read from committed storage.
 use super::*;
 use crate::brand::BODY;
-use hustlx_oss::boxscore::{Align, Block, Column as SheetColumn, Row, Sheet, SheetResult, build};
+use hustlx_oss::boxscore::{
+    Align, Block, Column as SheetColumn, LineScore, Row, Sheet, SheetResult, build,
+};
 use hustlx_oss::storage::Result;
 use iced::Task;
 use iced::widget::column;
@@ -119,6 +121,28 @@ impl App {
     }
 }
 
+/// Fixed-width line score: the header row first, then one row per side.
+fn line_score_lines(ls: &LineScore) -> Vec<String> {
+    let fmt = |name: &str, cells: &[String], total: &str| {
+        let mut out = format!("{name:<24}");
+        for value in cells {
+            out.push_str(&format!("{value:>6}"));
+        }
+        out.push_str(&format!("{total:>8}"));
+        out
+    };
+    // The sheet's columns already end with the total label, so split it off instead of adding one.
+    let (total_label, period_labels) = ls
+        .columns
+        .split_last()
+        .map_or(("", &ls.columns[..]), |(t, rest)| (t.as_str(), rest));
+    let mut out = vec![fmt("", period_labels, total_label)];
+    for r in &ls.rows {
+        out.push(fmt(&r.name, &r.cells, &r.total));
+    }
+    out
+}
+
 fn sheet_view(sheet: &Sheet, c: Colors) -> Element<'_, Message> {
     let h = &sheet.header;
     let place = match &h.venue {
@@ -153,22 +177,14 @@ fn sheet_view(sheet: &Sheet, c: Colors) -> Element<'_, Message> {
     .width(Fill);
     let mut page = column![header].spacing(14);
     if let Some(ls) = &sheet.line_score {
-        let fmt = |name: &str, cells: &[String], total: &str| {
-            let mut out = format!("{name:<24}");
-            for value in cells {
-                out.push_str(&format!("{value:>6}"));
-            }
-            out.push_str(&format!("{total:>8}"));
-            out
-        };
-        let labels = fmt("", &ls.columns, "T");
+        let rows = line_score_lines(ls);
         let mut lines = column![
             text(&ls.title).size(13).font(HEADING),
-            text(labels).size(11).font(BOLD).color(c.muted),
+            text(rows[0].clone()).size(11).font(BOLD).color(c.muted),
         ]
         .spacing(4);
-        for r in &ls.rows {
-            lines = lines.push(text(fmt(&r.name, &r.cells, &r.total)).size(11).font(BODY));
+        for r in &rows[1..] {
+            lines = lines.push(text(r.clone()).size(11).font(BODY));
         }
         page = page.push(card(wide(lines), c).width(Fill));
     }
@@ -333,5 +349,27 @@ mod tests {
         assert_eq!(app.screen, Screen::Matches);
         assert!(app.boxscore.is_none());
         render(&mut app);
+    }
+
+    #[test]
+    fn line_score_header_lists_each_column_once_with_a_single_total() {
+        let SheetResult::Ready(sheet) = hustlx_oss::boxscore::build(
+            &hustlx_oss::boxscore::fixtures::basketball_full(),
+            None,
+            "2026-10-24",
+            "0.1.0",
+        ) else {
+            panic!("full fixture must be Ready");
+        };
+        let ls = sheet.line_score.as_ref().unwrap();
+        let rows = super::line_score_lines(ls);
+        let header: Vec<&str> = rows[0].split_whitespace().collect();
+        assert_eq!(header, ["P1", "P2", "P3", "P4", "T"]);
+        let first: Vec<&str> = rows[1].split_whitespace().collect();
+        assert_eq!(
+            first.len(),
+            header.len() + 2,
+            "name has two words, then one value per header column"
+        );
     }
 }
