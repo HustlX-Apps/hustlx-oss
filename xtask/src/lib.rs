@@ -434,19 +434,64 @@ fn release(root: &Path, version: &str, target: Option<&str>, dry: bool) -> Resul
     );
     Ok(())
 }
+/// Renders the bundled basketball fixtures to one-page PDFs in `out`, stamped
+/// with today's date and the app version from the repository `Cargo.toml`.
+fn boxscore_fixtures(root: &Path, out: &Path) -> Result<Vec<PathBuf>> {
+    use hustlx_oss::boxscore::{
+        SheetResult, build, fixtures,
+        layout::{Metrics, layout},
+        pdf::render,
+    };
+    fs::create_dir_all(out).map_err(|e| format!("Cannot create {}: {e}", out.display()))?;
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let version = current_version(root)?.full;
+    let metrics = Metrics::bundled();
+    let mut written = Vec::new();
+    for (name, fixture) in [
+        ("basketball-full", fixtures::basketball_full as fn() -> _),
+        ("basketball-unstamped", fixtures::basketball_unstamped),
+        ("basketball-oversized", fixtures::basketball_oversized),
+    ] {
+        let SheetResult::Ready(sheet) = build(&fixture(), None, &today, &version) else {
+            return Err(format!("Fixture {name} did not build a box score."));
+        };
+        let page = layout(&sheet, &metrics).map_err(|e| {
+            format!(
+                "Fixture {name} does not fit one page by {} pt.",
+                e.overflow_pt
+            )
+        })?;
+        let path = out.join(format!("{name}.pdf"));
+        fs::write(&path, render(&page))
+            .map_err(|e| format!("Cannot write {}: {e}", path.display()))?;
+        written.push(path);
+    }
+    Ok(written)
+}
 pub fn run(args: Vec<String>) -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .ok_or("Cannot find repository root")?;
     if args.is_empty() || args == ["--help"] || args == ["help"] {
         println!(
-            "cargo xtask version [VERSION | --bump patch|minor|major] [--dry-run]\ncargo xtask release --version VERSION [--target TARGET] [--dry-run]\n\nVersion changes Cargo.toml/Cargo.lock only; --dry-run prints the next version without writes. Release builds local ZIPs/checksums only. GitHub automation: python3 scripts/github_release.py --help."
+            "cargo xtask version [VERSION | --bump patch|minor|major] [--dry-run]\ncargo xtask release --version VERSION [--target TARGET] [--dry-run]\ncargo xtask boxscore-fixtures [--out DIR]\n\nVersion changes Cargo.toml/Cargo.lock only; --dry-run prints the next version without writes. Release builds local ZIPs/checksums only. Boxscore-fixtures writes the basketball fixture PDFs to target/boxscore/ by default. GitHub automation: python3 scripts/github_release.py --help."
         );
         return Ok(());
     }
     if args.first().is_some_and(|a| a == "version") {
         let options: Vec<_> = args[1..].iter().map(String::as_str).collect();
         println!("{}", version_command(root, &options)?);
+        return Ok(());
+    }
+    if args.first().is_some_and(|a| a == "boxscore-fixtures") {
+        let out = match &args[1..] {
+            [] => root.join("target/boxscore"),
+            [flag, dir] if flag == "--out" => PathBuf::from(dir),
+            _ => return Err("Use cargo xtask boxscore-fixtures [--out DIR].".into()),
+        };
+        for path in boxscore_fixtures(root, &out)? {
+            println!("{}", path.display());
+        }
         return Ok(());
     }
     if args.first().is_none_or(|a| a != "release") {

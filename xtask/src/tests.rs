@@ -282,3 +282,21 @@ fn native_checksum_matches_a_known_sha256_digest() {
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     );
 }
+#[test]
+fn xtask_fixture_command_writes_three_pdfs() {
+    let t = Temp::new();
+    run(vec![
+        "boxscore-fixtures".into(),
+        "--out".into(),
+        t.0.display().to_string(),
+    ])
+    .unwrap();
+    for name in [
+        "basketball-full.pdf",
+        "basketball-unstamped.pdf",
+        "basketball-oversized.pdf",
+    ] {
+        let bytes = fs::read(t.0.join(name)).unwrap();
+        assert!(bytes.starts_with(b"%PDF-"), "{name}");
+    }
+}
